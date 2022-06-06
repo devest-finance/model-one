@@ -7,6 +7,8 @@ contract('DevestOne', (accounts) => {
         const ERC20TokenInstance = await ERC20Token.deployed();
         const balance = await ERC20TokenInstance.balanceOf.call(accounts[0]);
 
+        let balanceAccount = await web3.eth.getBalance(accounts[0]);
+
         assert.isTrue(balance.valueOf() > 0, "To less token");
     });
 
@@ -70,7 +72,7 @@ contract('DevestOne', (accounts) => {
 
         // fetch orders
         const orders = await devestOne.getOrders.call();
-        await devestOne.accept(orders[0].from, 50, { from: accounts[0] });
+        await devestOne.accept(orders[0].from, 50, { from: accounts[0], value: 10000000 });
 
         // check if root got funds back
         const fundsPlayer = (await erc20Token.balanceOf(accounts[1])).toNumber();
@@ -214,7 +216,7 @@ contract('DevestOne', (accounts) => {
         assert.equal(fundsTangibleAfter, 3167250000, "Escrow not returned");
     });
 
-    it('Submit sell orders', async () => {
+    it('Submit ask order', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
 
@@ -291,6 +293,7 @@ contract('DevestOne', (accounts) => {
         await erc20Token.approve(devestOne.address, 100000000, { from: accounts[0] })
         await devestOne.disburse(100000000, { from: accounts[0] } );
 
+        // WRONG => Now all owners should have higher balance but tangible should be empty.
         const fundsTangibleAfter = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
         const value = (await devestOne.getBalance.call()).toNumber();
         const price = (await devestOne.getPrice.call()).toNumber();

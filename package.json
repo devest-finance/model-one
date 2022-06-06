@@ -18,5 +18,11 @@
   "bugs": {
     "url": "https://github.com/devest-finance/model-one/issues"
   },
-  "homepage": "https://github.com/devest-finance/model-one#readme"
+  "homepage": "https://github.com/devest-finance/model-one#readme",
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.6.0",
+    "@openzeppelin/contracts-ethereum-package": "^3.0.0",
+    "bintrees": "^1.0.2",
+    "num": "^0.3.0"
+  }
 }

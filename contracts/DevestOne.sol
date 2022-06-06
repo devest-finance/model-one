@@ -3,10 +3,11 @@ pragma solidity ^0.8.4;
 
 import "./libs/IERC20.sol";
 import "./ITangibleStakeToken.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 // DeVest Investment Model One
 // Bid & Offer
-contract DevestOne is ITangibleStakeToken {
+contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
     // When an shareholder exchanged his shares
     event swapped(address indexed from, address indexed to, uint256 share);
@@ -17,10 +18,10 @@ contract DevestOne is ITangibleStakeToken {
     event leftOver(uint256 leftover);
 
     // reference to deployed $OIR contract
-    IERC20 internal _ori;
+    IERC20 internal _token;
 
     // Owner of the contract (for admin controls)
-    address private owner;
+    address private publisher;
 
     // contract was terminated and can't be used anymore
     bool private terminated = false;
@@ -54,15 +55,13 @@ contract DevestOne is ITangibleStakeToken {
     uint256 private escrow;
 
     // Stakes
-
-
     mapping (address => uint256) private shares;
     address[] private shareholders;
 
     // Set owner and DI OriToken
-    constructor(address oriTokenAddress) {
-        owner = _msgSender();
-        _ori = ERC20Token(oriTokenAddress);
+    constructor(address tokenAddress) {
+        publisher = _msgSender();
+        _token = ERC20Token(tokenAddress);
     }
 
     // ----------------------------------------------------------------------------------------------------------
@@ -137,12 +136,10 @@ contract DevestOne is ITangibleStakeToken {
     function initalize(uint256 amount) public returns (bool){
         require(!initialized, 'Tangible already initialized');
         require(tangibleAddress != address(0), 'Please set tangible address first');
-        require(owner == _msgSender(), 'Only owner can initalize tangibles');
+        require(publisher == _msgSender(), 'Only owner can initialize tangibles');
 
-        // transfer funds
-        _ori.transferFrom(_msgSender(), address(this), amount);
-        balance = amount;
-        initialValue = amount;
+        balance = 0; //amount;
+        initialValue = 0; //amount;
 
         shareholders.push(_msgSender());
         shares[_msgSender()] = 100;
@@ -154,7 +151,7 @@ contract DevestOne is ITangibleStakeToken {
     }
 
     // Bid for shares
-    function bid(uint256 price, uint256 amount) public virtual override _isActive() returns (bool) {
+    function bid(uint256 price, uint256 amount) public virtual override nonReentrant _isActive returns (bool) {
         require(amount > 0, 'Invalid amount submitted');
         require(price > 0, 'Invalid price submitted');
         require(orders[_msgSender()].amount == 0, 'Active bid, cancel first');
@@ -164,7 +161,7 @@ contract DevestOne is ITangibleStakeToken {
         _escrow += (_escrow * tangibleTax) / 100;
 
         // check if enough escrow allowed
-        require(_ori.allowance(_msgSender(), address(this)) >= _escrow, 'Insufficient allowance provided');
+        require(_token.allowance(_msgSender(), address(this)) >= _escrow, 'Insufficient allowance provided');
 
         // store bid
         Order memory _bid = Order(price, amount, _msgSender(), _escrow, true);
@@ -172,7 +169,7 @@ contract DevestOne is ITangibleStakeToken {
         orderAddresses.push(_msgSender());
 
         // pull escrow
-        _ori.transferFrom(_msgSender(), address(this), _escrow);
+        _token.transferFrom(_msgSender(), address(this), _escrow);
         escrow += price * amount;
 
         emit ordered(_msgSender(), price, amount, true);
@@ -196,10 +193,14 @@ contract DevestOne is ITangibleStakeToken {
         emit ordered(_msgSender(), price, amount, false);
     }
 
-    function acceptOffer(address shareholder, uint256 amount) public _isActive() {
+    function acceptOffer(address shareholder, uint256 amount) public _isActive payable {
         require(amount > 0, 'Invalid amount submitted');
         require(orders[shareholder].buy == false, 'Invalid order');
         require(orders[shareholder].amount >= amount, 'Invalid order');
+
+        // check for fee and transfer to owner
+        require(msg.value > 100000000000000, "Please provide enough fee");
+        payable(publisher).transfer(100000000000000);
 
         // offer from which we sell
         Order memory _offer = orders[shareholder];
@@ -214,14 +215,14 @@ contract DevestOne is ITangibleStakeToken {
         uint256 totalCost = cost + tax;
 
         // pull tokens from buyer
-        _ori.transferFrom(_msgSender(), address(this), totalCost);
+        _token.transferFrom(_msgSender(), address(this), totalCost);
         // pay tangible
-        _ori.transfer(tangibleAddress, tangible);
+        _token.transfer(tangibleAddress, tangible);
         // add contribution to balance
         balance += contribution;
 
         // transfer funds to shareholder
-        _ori.transfer(shareholder, cost);
+        _token.transfer(shareholder, cost);
 
         // swap shares
         shares[shareholder] -= amount;
@@ -241,7 +242,7 @@ contract DevestOne is ITangibleStakeToken {
 
         if (_order.buy){
             // return escrow leftover
-            _ori.transfer(_msgSender(), _order.escrow);
+            _token.transfer(_msgSender(), _order.escrow);
 
             // remove escrow
             orders[_msgSender()].escrow -= _order.escrow;
@@ -255,11 +256,15 @@ contract DevestOne is ITangibleStakeToken {
     }
 
     // Accept bid and sell shares
-    function accept(address bidder, uint256 amount) public _isActive() returns (bool) {
+    function accept(address bidder, uint256 amount) public _isActive() payable returns (bool) {
         require(amount > 0 && amount <= 100, 'Invalid amount submitted');
         require(orders[bidder].amount > 0, 'Invalid bid submitted');
         require(orders[bidder].from != _msgSender(), 'You cant accept your own bid');
         require(orders[bidder].amount >= amount, 'Invalid amount submitted');
+
+        // check for fee and transfer to owner
+        require(msg.value > 100000000000000, "Please provide enough fee");
+        payable(publisher).transfer(100000000000000);
 
         Order memory _bid = orders[bidder];
         uint256 totalCost = amount * _bid.price;
@@ -273,18 +278,14 @@ contract DevestOne is ITangibleStakeToken {
         orders[bidder].escrow -= totalCost + tax;
 
         // pay tangible
-        _ori.transfer(tangibleAddress, tangible);
+        _token.transfer(tangibleAddress, tangible);
         // add contribution to balance
         balance += contribution;
         // take shares from owner
         shares[_msgSender()] -= amount;
 
         // transfer funds, if receiver == owner => Burn
-        if (_msgSender() == owner){
-            _ori.transfer(0x000000000000000000000000000000000000dEaD, totalCost);
-        } else {
-            _ori.transfer(_msgSender(), totalCost);
-        }
+        _token.transfer(_msgSender(), totalCost);
 
         // add or extend new shareholder
         updateShares(bidder, _msgSender(), amount);
@@ -298,7 +299,7 @@ contract DevestOne is ITangibleStakeToken {
 
     // Set the tangible address (for emergency, if player wallet spoofed)
     function setTangible(address _tangibleAddress) public returns (bool) {
-        require(owner == msg.sender, 'Only owner can set Tangible');
+        require(publisher == msg.sender, 'Only owner can set Tangible');
 
         tangibleAddress = _tangibleAddress;
         return true;
@@ -310,11 +311,13 @@ contract DevestOne is ITangibleStakeToken {
         require(!terminated, 'Share was terminated');
         require(amount > 0, 'Invalid amount provided');
 
+        // TODO Disburse amount send, and alos amount collected from contributionTax
+
         // check if enough escrow allowed
-        require(_ori.allowance(_msgSender(), address(this)) >= amount, 'Insufficient allowance provided');
+        require(_token.allowance(_msgSender(), address(this)) >= amount, 'Insufficient allowance provided');
 
         // pull escrow
-        _ori.transferFrom(_msgSender(), address(this), amount);
+        _token.transferFrom(_msgSender(), address(this), amount);
         balance += amount;
 
         return true;
@@ -322,17 +325,17 @@ contract DevestOne is ITangibleStakeToken {
 
     // Terminate this contract, and pay-out all remaining investors
     function terminate() public override _isActive() returns (bool) {
-        require(owner == msg.sender, 'Only owner can terminate');
+        require(publisher == msg.sender, 'Only owner can terminate');
 
         uint256 price = getPrice();
 
         // transfer to all their shares
         for(uint256 i=0;i<shareholders.length;i++)
-            _ori.transfer(shareholders[i], shares[shareholders[i]] * price);
+            _token.transfer(shareholders[i], shares[shareholders[i]] * price);
 
         // cancel bids
         for(uint256 i=0;i< orderAddresses.length;i++){
-            _ori.transfer(orderAddresses[i], orders[orderAddresses[i]].escrow);
+            _token.transfer(orderAddresses[i], orders[orderAddresses[i]].escrow);
             escrow -= orders[orderAddresses[i]].escrow;
             orders[orderAddresses[i]].amount = 0;
             orders[orderAddresses[i]].escrow = 0;
