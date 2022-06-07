@@ -3,7 +3,7 @@ pragma solidity ^0.8.4;
 
 import "./libs/IERC20.sol";
 import "./ITangibleStakeToken.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 // DeVest Investment Model One
 // Bid & Offer
@@ -150,6 +150,10 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         return true;
     }
 
+    function ask(uint256 price, uint256 amount) public override _isActive {
+        bool test = true;
+    }
+
     // Bid for shares
     function bid(uint256 price, uint256 amount) public virtual override nonReentrant _isActive returns (bool) {
         require(amount > 0, 'Invalid amount submitted');
@@ -178,7 +182,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     }
 
     // Offer shares for a specific price
-    function offer(uint256 price, uint256 amount) public virtual override _isActive() {
+    function offer(uint256 price, uint256 amount) public virtual _isActive {
         require(amount > 0, 'Invalid amount submitted');
         require(price > 0, 'Invalid price submitted');
         require(orders[_msgSender()].amount == 0, 'Active order, cancel first');
@@ -256,7 +260,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     }
 
     // Accept bid and sell shares
-    function accept(address bidder, uint256 amount) public _isActive() payable returns (bool) {
+    function accept(address bidder, uint256 amount) public override _isActive payable returns (bool) {
         require(amount > 0 && amount <= 100, 'Invalid amount submitted');
         require(orders[bidder].amount > 0, 'Invalid bid submitted');
         require(orders[bidder].from != _msgSender(), 'You cant accept your own bid');
