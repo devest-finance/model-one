@@ -1,5 +1,6 @@
 const DevestOne = artifacts.require("DevestOne");
 const ERC20Token = artifacts.require("ERC20Token");
+const assert = require("chai").assert;
 
 contract('DevestOne', (accounts) => {
 
@@ -7,44 +8,48 @@ contract('DevestOne', (accounts) => {
         const ERC20TokenInstance = await ERC20Token.deployed();
         const balance = await ERC20TokenInstance.balanceOf.call(accounts[0]);
 
-        let balanceAccount = await web3.eth.getBalance(accounts[0]);
+        const balanceAccount = await web3.eth.getBalance(accounts[0]);
 
         assert.isTrue(balance.valueOf() > 0, "To less token");
+        assert.isTrue(Number(balanceAccount) > 0)
     });
 
-    it('Transfer some Token to all traders', async () => {
+    it('should transfer some ETH Token to all traders', async () => {
         const erc20Token = await ERC20Token.deployed();
 
-        // Setup 2 accounts.
-        const accountOne = accounts[0];
+        // Setup account.
+        const account = accounts[0];
 
         // Make transaction from first account to second.
-        for(let i=2;i<10;i++) {
+        for(let i=2; i<10; i++) {
             const amount = 40000000000;
-            await erc20Token.transfer(accounts[i], amount, {from: accountOne});
+            await erc20Token.transfer(accounts[i], amount, {from: account});
         }
 
         // Get balances of first and second account after the transactions.
-        const accountOneEndingBalance = (await erc20Token.balanceOf.call(accountOne)).toNumber();
+        const accountOneEndingBalance = (await erc20Token.balanceOf.call(account)).toNumber();
 
         // send back
         assert.equal(accountOneEndingBalance, 680000000000, "Failed to transfer funds");
     });
 
-    it('Setup Tangible', async () => {
+    it('should Setup Tangible', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
 
-        await erc20Token.approve(devestOne.address, 3000000000, { from: accounts[0] });
-        await devestOne.setTangible(accounts[1], {from : accounts[0]} );
-        const t = await devestOne.initalize(3000000000, { from: accounts[0] });
+        const erc20ApproveResponse = await erc20Token.approve(devestOne.address, 3000000000, { from: accounts[0] });
+        assert.exists(erc20ApproveResponse.tx);
 
-        const price = (await devestOne.getPrice.call()).toNumber();
-        const balance = (await devestOne.getBalance.call()).toNumber();
+        const setTangibleRes = await devestOne.setTangible(accounts[1], {from : accounts[0]} );
+        assert.exists(setTangibleRes.tx);
+
+        const initializeRes = await devestOne.initialize(3000000000, { from: accounts[0] });
+        assert.exists(initializeRes.tx);
+
+        const pricePerUnit = (await devestOne.getPrice.call()).toNumber();
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
 
-        assert.equal(price, 30000000, "Invalid price on initialized tangible");
-        assert.equal(balance, 3000000000, "Invalid balance on initialized tangible");
+        assert.equal(pricePerUnit, 30000000/100, "Invalid price on initialized tangible");
         assert.equal(fundsTangible, 3000000000, "Invalid funds on initialized tangible");
     })
 

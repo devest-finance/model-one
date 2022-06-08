@@ -32,6 +32,9 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     // initial value
     uint256 private initialValue = 0;
 
+    // Last price which was accepted in order book per unit
+    uint256 private lastPricePerUnit = 0;
+
     // Shares contributed to the player
     uint constant tangibleTax = 10;
     uint constant contributionTax = 50;
@@ -133,13 +136,15 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     // ------------------------------------------------- PUBLIC -------------------------------------------------
     // ----------------------------------------------------------------------------------------------------------
 
-    function initalize(uint256 amount) public returns (bool){
+    function initialize(uint256 amount) public returns (bool){
         require(!initialized, 'Tangible already initialized');
         require(tangibleAddress != address(0), 'Please set tangible address first');
         require(publisher == _msgSender(), 'Only owner can initialize tangibles');
+        require(amount >= 100, 'Amount must be bigger than 100');
 
-        balance = 0; //amount;
-        initialValue = 0; //amount;
+        initialValue = amount;
+
+        lastPricePerUnit = amount / 100;
 
         shareholders.push(_msgSender());
         shares[_msgSender()] = 100;
@@ -378,7 +383,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
     // Return current price
     function getPrice() public view returns (uint256) {
-        return balance / 100;
+        return lastPricePerUnit;
     }
 
     function getInitialValue() public view returns (uint256){
