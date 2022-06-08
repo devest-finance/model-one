@@ -42,6 +42,8 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     // Total balance (locked in $ORI)
     uint256 private balance;
 
+    uint256 private lastPricePerUnit;
+
     // Offers
     struct Order {
         uint256 price;
@@ -138,11 +140,10 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         require(tangibleAddress != address(0), 'Please set tangible address first');
         require(publisher == _msgSender(), 'Only owner can initialize tangibles');
 
-        balance = 0; //amount;
-        initialValue = 0; //amount;
 
         shareholders.push(_msgSender());
         shares[_msgSender()] = 100;
+        lastPricePerUnit = amount / 100;
 
         // start bidding
         initialized = true;
@@ -378,7 +379,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
     // Return current price
     function getPrice() public view returns (uint256) {
-        return balance / 100;
+      return lastPricePerUnit;
     }
 
     function getInitialValue() public view returns (uint256){

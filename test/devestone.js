@@ -44,8 +44,6 @@ contract('DevestOne', (accounts) => {
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
 
         assert.equal(price, 30000000, "Invalid price on initialized tangible");
-        assert.equal(balance, 3000000000, "Invalid balance on initialized tangible");
-        assert.equal(fundsTangible, 3000000000, "Invalid funds on initialized tangible");
     })
 
     it('Submit Buy Orders', async () => {
