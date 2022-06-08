@@ -62,12 +62,9 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     address[] private shareholders;
 
     // Set owner and DI OriToken
-    constructor(address tokenAddress, uint tax) {
-        require(tax >= 0, 'Invalid tax value');
-        require(tax <= 100, 'Invalid tax value');
+    constructor(address tokenAddress) {
         publisher = _msgSender();
         _token = ERC20Token(tokenAddress);
-        tangibleTax = tax;
     }
 
     // ----------------------------------------------------------------------------------------------------------
@@ -139,12 +136,15 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     // ------------------------------------------------- PUBLIC -------------------------------------------------
     // ----------------------------------------------------------------------------------------------------------
 
-    function initialize(uint256 amount) public returns (bool){
+    function initialize(uint256 amount, uint tax) public returns (bool){
         require(!initialized, 'Tangible already initialized');
         require(tangibleAddress != address(0), 'Please set tangible address first');
         require(publisher == _msgSender(), 'Only owner can initialize tangibles');
         require(amount >= 100, 'Amount must be bigger than 100');
+        require(tax >= 0, 'Invalid tax value');
+        require(tax <= 100, 'Invalid tax value');
 
+        tangibleTax = tax;
         initialValue = amount;
 
         lastPricePerUnit = amount / 100;
@@ -210,7 +210,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         emit ordered(_msgSender(), price, amount, false);
     }
 
-    function accept(address shareholder, uint256 amount) public _isActive payable {
+    function accept(address shareholder, uint256 amount) external _isActive override payable {
         require(amount > 0, 'Invalid amount submitted');
         require(orders[shareholder].buy == false, 'Invalid order');
         require(orders[shareholder].amount >= amount, 'Invalid order');

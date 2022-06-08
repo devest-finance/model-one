@@ -41,7 +41,7 @@ contract('DevestOne', (accounts) => {
         const setTangibleRes = await devestOne.setTangible(accounts[1], { from: accounts[0] });
         assert.exists(setTangibleRes.tx);
 
-        const initializeRes = await devestOne.initialize(3000000000, { from: accounts[0] });
+        const initializeRes = await devestOne.initialize(3000000000, 10, { from: accounts[0] });
         assert.exists(initializeRes.tx);
 
         const pricePerUnit = (await devestOne.getPrice.call()).toNumber();
