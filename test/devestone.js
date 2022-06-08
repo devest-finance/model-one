@@ -1,5 +1,8 @@
+const { expect } = require("chai");
+
 const DevestOne = artifacts.require("DevestOne");
 const ERC20Token = artifacts.require("ERC20Token");
+const assert = require("chai").assert;
 
 contract('DevestOne', (accounts) => {
 
@@ -7,43 +10,42 @@ contract('DevestOne', (accounts) => {
         const ERC20TokenInstance = await ERC20Token.deployed();
         const balance = await ERC20TokenInstance.balanceOf.call(accounts[0]);
 
-        let balanceAccount = await web3.eth.getBalance(accounts[0]);
+        const balanceAccount = await web3.eth.getBalance(accounts[0]);
 
         assert.isTrue(balance.valueOf() > 0, "To less token");
+        assert.isTrue(Number(balanceAccount) > 0)
     });
 
-    it('Transfer some Token to all traders', async () => {
+    it('should transfer some ETH Token to all traders', async () => {
         const erc20Token = await ERC20Token.deployed();
 
-        // Setup 2 accounts.
-        const accountOne = accounts[0];
+        // Setup account.
+        const account = accounts[0];
 
         // Make transaction from first account to second.
-        for(let i=2;i<10;i++) {
+        for (let i = 2; i < 10; i++) {
             const amount = 40000000000;
-            await erc20Token.transfer(accounts[i], amount, {from: accountOne});
+            await erc20Token.transfer(accounts[i], amount, { from: account });
         }
 
         // Get balances of first and second account after the transactions.
-        const accountOneEndingBalance = (await erc20Token.balanceOf.call(accountOne)).toNumber();
+        const accountOneEndingBalance = (await erc20Token.balanceOf.call(account)).toNumber();
 
         // send back
         assert.equal(accountOneEndingBalance, 680000000000, "Failed to transfer funds");
     });
 
-    it('Setup Tangible', async () => {
-        const erc20Token = await ERC20Token.deployed();
+    it('should Setup Tangible', async () => {
         const devestOne = await DevestOne.deployed();
 
-        await erc20Token.approve(devestOne.address, 3000000000, { from: accounts[0] });
-        await devestOne.setTangible(accounts[1], {from : accounts[0]} );
-        const t = await devestOne.initalize(3000000000, { from: accounts[0] });
+        const setTangibleRes = await devestOne.setTangible(accounts[1], { from: accounts[0] });
+        assert.exists(setTangibleRes.tx);
 
-        const price = (await devestOne.getPrice.call()).toNumber();
-        const balance = (await devestOne.getBalance.call()).toNumber();
-        const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
+        const initializeRes = await devestOne.initialize(3000000000, { from: accounts[0] });
+        assert.exists(initializeRes.tx);
 
-        assert.equal(price, 30000000, "Invalid price on initialized tangible");
+        const pricePerUnit = (await devestOne.getPrice.call()).toNumber();
+        assert.equal(pricePerUnit, 3000000000 / 100, "Invalid price on initialized tangible");
     })
 
     it('Submit Buy Orders', async () => {
@@ -53,7 +55,7 @@ contract('DevestOne', (accounts) => {
         // submit bid
         const escrow = 1500000000 + (1500000000 * 0.1);
         await erc20Token.approve(devestOne.address, escrow, { from: accounts[2] });
-        await devestOne.bid(30000000, 50, {from: accounts[2]});
+        await devestOne.bid(30000000, 50, { from: accounts[2] });
 
         // tangible funds should increase
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
@@ -73,8 +75,8 @@ contract('DevestOne', (accounts) => {
         await devestOne.accept(orders[0].from, 50, { from: accounts[0], value: 10000000 });
 
         // check if root got funds back
-        const fundsPlayer = (await erc20Token.balanceOf(accounts[1])).toNumber();
-        assert.equal(fundsPlayer, 75000000, "Invalid funds on player after buy order");
+        const taxReceiver = (await erc20Token.balanceOf(accounts[1])).toNumber();
+        assert.equal(taxReceiver, 75000000, "Invalid funds on player after buy order");
 
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
         assert.equal(fundsTangible, 3075000000, "Invalid funds on tangible after accept");
@@ -223,7 +225,7 @@ contract('DevestOne', (accounts) => {
         // test to submit sell order without having shares
         try {
             await devestOne.offer(price * 0.5, 20, { from: accounts[7] });
-        } catch (ex){
+        } catch (ex) {
             assert.equal(ex.reason, "No shares available", "Should fail");
         }
 
@@ -239,7 +241,7 @@ contract('DevestOne', (accounts) => {
         assert.equal(orders[0].amount, 20, "Order not booked");
     });
 
-    it('Accept sell order', async() => {
+    it('Accept sell order', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
 
@@ -254,7 +256,7 @@ contract('DevestOne', (accounts) => {
         const fundsBuyerBefore = (await erc20Token.balanceOf.call(accounts[7])).toNumber();
         const balanceBefore = (await devestOne.getBalance.call()).toNumber();
 
-        await erc20Token.approve(devestOne.address, cost + taxAndContribution , { from: accounts[7] });
+        await erc20Token.approve(devestOne.address, cost + taxAndContribution, { from: accounts[7] });
         await devestOne.acceptOffer(accounts[2], 10, { from: accounts[7] });
 
         const fundsTangibleAfter = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
@@ -267,7 +269,7 @@ contract('DevestOne', (accounts) => {
         assert.equal(fundsOwnerAfter, fundsOwnerBefore + cost, "Invalid funds on Seller");
 
         const shareOwnerAfter = (await devestOne.getShare.call(accounts[2])).toNumber();
-        assert.equal(shareOwnerAfter, shareOwnerBefore-10, "Shares not taken of Seller");
+        assert.equal(shareOwnerAfter, shareOwnerBefore - 10, "Shares not taken of Seller");
 
         const fundsBuyerAfter = (await erc20Token.balanceOf.call(accounts[7])).toNumber();
         assert.equal(fundsBuyerAfter, fundsBuyerBefore - cost - taxAndContribution, "Invalid funds on Buyer (Paid to less?)");
@@ -282,14 +284,14 @@ contract('DevestOne', (accounts) => {
         assert.equal(buyerShares, 10, "Buyer didn't receiver shares");
     });
 
-    it('Disburse funds', async() => {
+    it('Disburse funds', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
 
         const fundsTangibleBefore = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
 
         await erc20Token.approve(devestOne.address, 100000000, { from: accounts[0] })
-        await devestOne.disburse(100000000, { from: accounts[0] } );
+        await devestOne.disburse(100000000, { from: accounts[0] });
 
         // WRONG => Now all owners should have higher balance but tangible should be empty.
         const fundsTangibleAfter = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
@@ -311,7 +313,7 @@ contract('DevestOne', (accounts) => {
         const shareholders = await devestOne.getShareholders.call();
         let shareSummary = 0;
         let pSummary = 0;
-        for(let share of shareholders) {
+        for (let share of shareholders) {
             const amount = (await erc20Token.balanceOf.call(share)).toNumber();
             shares.push(amount);
             shareSummary += amount;
@@ -334,7 +336,7 @@ contract('DevestOne', (accounts) => {
         const offers = await devestOne.getOrders.call();
 
         let index = 0;
-        for(let share of shareholders){
+        for (let share of shareholders) {
             const balance = (await erc20Token.balanceOf.call(share)).toNumber();
             const before = shares[index];
         }
@@ -351,5 +353,5 @@ const createBid = async (percent, price, address) => {
     let escrow = price * percent;
     escrow = escrow + (escrow * 0.1)
     await erc20Token.approve(devestOne.address, escrow, { from: address });
-    await devestOne.bid(price, percent, {from: address});
+    await devestOne.bid(price, percent, { from: address });
 }
