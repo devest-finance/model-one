@@ -51,19 +51,20 @@ contract('DevestOne', (accounts) => {
     it('Submit Buy Orders', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
-
         // submit bid
-        const escrow = 1500000000 + (1500000000 * 0.1);
+        const bidPrice = 30000000;
+        const escrow = 1500000000 + (1500000000 * 0.1); // price of 50% + tax
+
         await erc20Token.approve(devestOne.address, escrow, { from: accounts[2] });
-        await devestOne.bid(30000000, 50, { from: accounts[2] });
+        await devestOne.bid(bidPrice, 50, { from: accounts[2] });
 
         // tangible funds should increase
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        assert.equal(fundsTangible, 4650000000, "Invalid funds after bid");
+        assert.equal(fundsTangible, escrow, "Invalid funds after bid");
 
         const orders = await devestOne.getOrders.call();
         assert.equal(orders.length, 1, "Order not stored");
-        assert.equal(orders[0].price, 30000000, "Order has invalid price");
+        assert.equal(orders[0].price, bidPrice, "Order has invalid price");
     });
 
     it('Accept Buy Orders (A)', async () => {
