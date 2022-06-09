@@ -48,7 +48,7 @@ contract('DevestOne', (accounts) => {
         assert.equal(pricePerUnit, 3000000000 / 100, "Invalid price on initialized tangible");
     })
 
-    it('Submit Buy Orders', async () => {
+    it('Submit Bid Orders', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
         // submit bid
@@ -67,13 +67,13 @@ contract('DevestOne', (accounts) => {
         assert.equal(orders[0].price, bidPrice, "Order has invalid price");
     });
 
-    it('Accept Buy Orders (A)', async () => {
+    it('Accept Bid Orders (A)', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
 
         // fetch orders
         const orders = await devestOne.getOrders.call();
-        await devestOne.accept(orders[0].from, 50, { from: accounts[0], value: 10000000 });
+      const x =  (await devestOne.accept.call(orders[0].from, 50, { from: accounts[0], value: 100000000 })).toNumber();
 
         // check if root got funds back
         const taxReceiver = (await erc20Token.balanceOf(accounts[1])).toNumber();
