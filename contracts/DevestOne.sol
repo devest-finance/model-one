@@ -3,12 +3,11 @@ pragma solidity ^0.8.4;
 
 import "./libs/IERC20.sol";
 import "./ITangibleStakeToken.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 // DeVest Investment Model One
 // Bid & Offer
 contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
-
     // When an shareholder exchanged his shares
     event swapped(address indexed from, address indexed to, uint256 share);
 
@@ -36,8 +35,8 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     uint256 private lastPricePerUnit = 0;
 
     // Shares contributed to the player
-    uint tangibleTax = 0;
-    uint constant contributionTax = 50;
+    uint256 tangibleTax = 0;
+    uint256 constant contributionTax = 50;
 
     // Address of the tangible
     address private tangibleAddress;
@@ -105,15 +104,15 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         }
     }
 
-    function updateShares(address bidder, address from, uint256 amount) internal {
+    function swap(address to, address from, uint256 amount) internal {
         // add new owner
         bool found = false;
         for(uint256 i=0;i<shareholders.length;i++)
-            found = shareholders[i] == bidder || found;
+            found = shareholders[i] == to || found;
 
-        if (!found)
-            shareholders.push(bidder);
-        shares[bidder] += amount;
+        if (!found) shareholders.push(to);
+        shares[to] += amount;
+        shares[from] -= amount;
 
         // update from
         if (shares[from] == 0){
@@ -210,22 +209,21 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         emit ordered(_msgSender(), price, amount, false);
     }
 
-    function accept(address shareholder, uint256 amount) external _isActive override payable {
-        require(amount > 0, 'Invalid amount submitted');
-        require(orders[shareholder].buy == false, 'Invalid order');
-        require(orders[shareholder].amount >= amount, 'Invalid order');
+    function accept(address orderOwner, uint256 amount) external payable override _isActive returns (uint256) {
+        require(amount > 0, "Invalid amount submitted");
+        // require(orders[shareholder].buy == false, 'Invalid order 1');
+        require(orders[orderOwner].amount >= amount, "Invalid order 2");
 
         // check for fee and transfer to owner
-        require(msg.value > 100000000000000, "Please provide enough fee");
-        payable(publisher).transfer(100000000000000);
+        require(msg.value > 10000000, "Please provide enough fee");
+        payable(publisher).transfer(msg.value);
 
         // offer from which we sell
-        Order memory _offer = orders[shareholder];
+        Order memory _offer = orders[orderOwner];
 
         // calculate taxes
         uint256 cost = _offer.price * amount;
         uint256 tax = (cost * tangibleTax) / 100;
-       
 
         // pull tokens from buyer
         if (_offer.buy == false) {
@@ -235,18 +233,19 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         }
 
         // transfer funds to shareholder
-        _token.transfer(shareholder, cost);
+        _token.transfer(_msgSender(), cost);
         // pay tangible
         _token.transfer(tangibleAddress, tax);
-        
-        // swap shares
-        shares[shareholder] -= amount;
-        updateShares(_msgSender(), shareholder, amount);
+
+
+        // TODO cover different event when accepting bid/ask
+        swap(orderOwner, _msgSender(), amount);
 
         // update offer
-        updateOrders(shareholder, amount);
+        updateOrders(orderOwner, amount);
 
-        emit swapped(shareholder, _msgSender(), amount);
+        // TODO cover different event when accepting bid/ask
+        emit swapped(_msgSender(), orderOwner, amount);
     }
 
     // Cancel order and return escrow
@@ -268,7 +267,6 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
         return true;
     }
-
 
     // Set the tangible address (for emergency, if player wallet spoofed)
     function setTangible(address _tangibleAddress) public returns (bool) {
@@ -359,8 +357,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         return shareholders;
     }
 
-    function getTax() public view returns (uint) {
+    function getTax() public view returns (uint256) {
         return tangibleTax;
     }
-
 }
