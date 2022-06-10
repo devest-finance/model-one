@@ -87,16 +87,19 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     /**
     *  Update stored bids, if bid was spend, remove from list
     */
-    function updateOrders(address bidder, uint256 amount) internal {
-        require(orders[bidder].amount >= amount, "Insufficient funds");
+    function deductAmountfromOrder(address orderOwner, uint256 amount) internal { 
+        require(orders[orderOwner].amount >= amount, "Insufficient funds");
 
-        orders[bidder].amount -= amount;
+        orders[orderOwner].amount -= amount;
+        uint256 totalPrice = orders[orderOwner].price * amount;
+        uint256 escrowDeduct = totalPrice + ((totalPrice * tangibleTax) / 100);
+        orders[orderOwner].escrow = orders[orderOwner].escrow - escrowDeduct;
 
-        if (orders[bidder].amount == 0){
-            require(orders[bidder].escrow == 0, 'Escrow leftover');
+        if (orders[orderOwner].amount == 0){
+            require(orders[orderOwner].escrow == 0, 'Escrow leftover'); // ????????????? WHAT IS THE PURPOSE OF THIS 
             uint256 index = 0;
             for(uint256 i=0;i< orderAddresses.length;i++){
-                if (orderAddresses[i] == bidder)
+                if (orderAddresses[i] == orderOwner)
                     index = i;
             }
             orderAddresses[index] = orderAddresses[orderAddresses.length-1];
@@ -104,7 +107,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         }
     }
 
-    function swap(address to, address from, uint256 amount) internal {
+    function swapShares(address to, address from, uint256 amount) internal {
         // add new owner
         bool found = false;
         for(uint256 i=0;i<shareholders.length;i++)
@@ -209,40 +212,49 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         emit ordered(_msgSender(), price, amount, false);
     }
 
-    function accept(address orderOwner, uint256 amount) external payable override _isActive returns (uint256) {
+    function accept(address orderOwner, uint256 amount) external payable override _isActive {
         require(amount > 0, "Invalid amount submitted");
-        // require(orders[shareholder].buy == false, 'Invalid order 1');
-        require(orders[orderOwner].amount >= amount, "Invalid order 2");
+        require(orders[orderOwner].amount >= amount, "Invalid order");
 
         // check for fee and transfer to owner
         require(msg.value > 10000000, "Please provide enough fee");
         payable(publisher).transfer(msg.value);
 
-        // offer from which we sell
-        Order memory _offer = orders[orderOwner];
+        Order memory order = orders[orderOwner];
 
         // calculate taxes
-        uint256 cost = _offer.price * amount;
+        uint256 cost = order.price * amount;
         uint256 tax = (cost * tangibleTax) / 100;
 
-        // pull tokens from buyer
-        if (_offer.buy == false) {
+        uint256 totalCost = cost + tax;
+        // accepting on sell order
+        if (order.buy == false) {
             // what the buyer needs to pay (including taxes)
-            uint256 totalCost = cost + tax;
             _token.transferFrom(_msgSender(), address(this), totalCost);
+            _token.transfer(order.from, cost);
+        } else {
+            // accepting buy order
+            // so caller is accepting to sell his share to order owner -> order owner is paying to caller
+            _token.transferFrom(orderOwner, address(this), totalCost);
+            _token.transfer(_msgSender(), cost);
         }
 
-        // transfer funds to shareholder
-        _token.transfer(_msgSender(), cost);
         // pay tangible
-        _token.transfer(tangibleAddress, tax);
+        // is this even needed? e.g.  _token.transferFrom(_msgSender(), address(this), totalCost); transfers all, then we move cost to user - isnt tax left on our address?
+       _token.transfer(tangibleAddress, tax);
 
 
         // TODO cover different event when accepting bid/ask
-        swap(orderOwner, _msgSender(), amount);
+        // msg sender is accepting sell order
+        if (order.buy == false) {   
+            swapShares(_msgSender(), orderOwner, amount);
+        } else {
+            // msg sender is accepting buy order
+            swapShares(orderOwner, _msgSender(), amount);
+        }
 
         // update offer
-        updateOrders(orderOwner, amount);
+        deductAmountfromOrder(orderOwner, amount);
 
         // TODO cover different event when accepting bid/ask
         emit swapped(_msgSender(), orderOwner, amount);
@@ -263,7 +275,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         }
 
         // update bids
-        updateOrders(_msgSender(), _order.amount);
+        deductAmountfromOrder(_msgSender(), _order.amount);
 
         return true;
     }

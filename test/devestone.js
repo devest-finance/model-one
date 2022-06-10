@@ -52,11 +52,13 @@ contract('DevestOne', (accounts) => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
         // submit bid
-        const bidPrice = 30000000;
-        const escrow = 1500000000 + (1500000000 * 0.1); // price of 50% + tax
+        const pricePerShare = 30000000;
+        const amountOfShares = 50;
+        const totalPrice = pricePerShare * amountOfShares;
+        const escrow = totalPrice + ((totalPrice) * 0.1); // price of 50% + tax
 
         await erc20Token.approve(devestOne.address, escrow, { from: accounts[2] });
-        await devestOne.bid(bidPrice, 50, { from: accounts[2] });
+        await devestOne.bid(pricePerShare, 50, { from: accounts[2] });
 
         // tangible funds should increase
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
@@ -64,20 +66,19 @@ contract('DevestOne', (accounts) => {
 
         const orders = await devestOne.getOrders.call();
         assert.equal(orders.length, 1, "Order not stored");
-        assert.equal(orders[0].price, bidPrice, "Order has invalid price");
+        assert.equal(orders[0].price, pricePerShare, "Order has invalid price");
     });
 
     it('Accept Bid Orders (A)', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
-
         // fetch orders
         const orders = await devestOne.getOrders.call();
-      const x =  (await devestOne.accept.call(orders[0].from, 50, { from: accounts[0], value: 100000000 })).toNumber();
-
+        await erc20Token.approve(devestOne.address, orders[0].escrow, { from: orders[0].from });
+        await devestOne.accept(orders[0].from, 50, { from: accounts[0], value: 100000000 });
         // check if root got funds back
         const taxReceiver = (await erc20Token.balanceOf(accounts[1])).toNumber();
-        assert.equal(taxReceiver, 75000000, "Invalid funds on player after buy order");
+        assert.equal(taxReceiver, 150000000, "Invalid funds on player after buy order");
 
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
         assert.equal(fundsTangible, 3075000000, "Invalid funds on tangible after accept");
