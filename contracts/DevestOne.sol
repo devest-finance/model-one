@@ -4,10 +4,12 @@ pragma solidity ^0.8.4;
 import "./libs/IERC20.sol";
 import "./ITangibleStakeToken.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "./ERC721Metadata.sol";
 
 // DeVest Investment Model One
 // Bid & Offer
-contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
+contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
+
     // When an shareholder exchanged his shares
     event swapped(address indexed from, address indexed to, uint256 share);
 
@@ -60,10 +62,16 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     mapping (address => uint256) private shares;
     address[] private shareholders;
 
+    // metadata
+    string _name;
+    string _symbol;
+
     // Set owner and DI OriToken
-    constructor(address tokenAddress) {
+    constructor(address tokenAddress, string memory __name, string memory __symbol) {
         publisher = _msgSender();
         _token = ERC20Token(tokenAddress);
+        _name = __name;
+        _symbol = __symbol;
     }
 
     // ----------------------------------------------------------------------------------------------------------
@@ -371,5 +379,15 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
     function getTax() public view returns (uint256) {
         return tangibleTax;
+    }
+
+    /// @notice A descriptive name for a collection of NFTs in this contract
+    function name() external view returns (string memory){
+        return _name;
+    }
+
+    /// @notice An abbreviated name for NFTs in this contract
+    function symbol() external view returns (string memory){
+        return _symbol;
     }
 }
