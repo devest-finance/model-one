@@ -1,8 +1,5 @@
-const { expect } = require("chai");
-
 const DevestOne = artifacts.require("DevestOne");
 const ERC20Token = artifacts.require("ERC20Token");
-const assert = require("chai").assert;
 
 contract('DevestOne', (accounts) => {
 
@@ -38,11 +35,8 @@ contract('DevestOne', (accounts) => {
     it('should Setup Tangible', async () => {
         const devestOne = await DevestOne.deployed();
 
-        const setTangibleRes = await devestOne.setTangible(accounts[1], { from: accounts[0] });
-        assert.exists(setTangibleRes.tx);
-
-        const initializeRes = await devestOne.initialize(3000000000, 10, { from: accounts[0] });
-        assert.exists(initializeRes.tx);
+        await devestOne.setTangible(accounts[1], { from: accounts[0] });
+        await devestOne.initialize(3000000000, 10, { from: accounts[0] });
 
         const pricePerUnit = (await devestOne.getPrice.call()).toNumber();
         assert.equal(pricePerUnit, 3000000000 / 100, "Invalid price on initialized tangible");
@@ -51,11 +45,12 @@ contract('DevestOne', (accounts) => {
     it('Submit Bid Orders', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
+
         // submit bid
         const pricePerShare = 30000000;
         const amountOfShares = 50;
         const totalPrice = pricePerShare * amountOfShares;
-        const escrow = totalPrice + ((totalPrice) * 0.1); // price of 50% + tax
+        const escrow = totalPrice + ((totalPrice) * 0.1); // totalPrice + tax (10%)
 
         await erc20Token.approve(devestOne.address, escrow, { from: accounts[2] });
         await devestOne.bid(pricePerShare, 50, { from: accounts[2] });
@@ -72,24 +67,33 @@ contract('DevestOne', (accounts) => {
     it('Accept Bid Orders (A)', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
+
+        // --- before
+        const fundsOwnerBefore = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
+
         // fetch orders
         const orders = await devestOne.getOrders.call();
-        await erc20Token.approve(devestOne.address, orders[0].escrow, { from: orders[0].from });
         await devestOne.accept(orders[0].from, 50, { from: accounts[0], value: 100000000 });
-        // check if root got funds back
+
+        // check if tax was paid
         const taxReceiver = (await erc20Token.balanceOf(accounts[1])).toNumber();
         assert.equal(taxReceiver, 150000000, "Invalid funds on player after buy order");
 
+        // check if owner got funds back
+        const fundsOwnerAfter = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
+        assert.equal(fundsOwnerAfter, fundsOwnerBefore + (150000000 * 10), "Seller (owner) received invalid amount for swap");
+
+        // no more funds on tangible ( all spend )
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        assert.equal(fundsTangible, 3075000000, "Invalid funds on tangible after accept");
+        assert.equal(fundsTangible, 0, "Invalid funds on tangible after accept");
 
         const balance = (await devestOne.getBalance.call()).toNumber();
         assert.equal(fundsTangible, balance, "Funds and balance should be same");
 
         const price = (await devestOne.getPrice.call()).toNumber();
-        assert.equal(price, 30750000, "Invalid price, in PreSale phase");
+        assert.equal(price, 30000000, "Invalid price, in PreSale phase");
 
-        const share = (await devestOne.getShare.call(accounts[2])).toNumber();
+        const share = (await devestOne.getShares.call(accounts[2])).toNumber();
         assert.equal(share, 50, "Invalid share of staker");
     })
 
@@ -104,6 +108,57 @@ contract('DevestOne', (accounts) => {
         assert.equal(sharedholders.length, 2, "New shareholder not included in shareholders");
     });
 
+    it("Create ask order", async () => {
+        const erc20Token = await ERC20Token.deployed();
+        const devestOne = await DevestOne.deployed();
+
+        await devestOne.ask(40000000, 25, { from: accounts[0] });
+
+        const offers = await devestOne.getOrders.call();
+        assert.equal(offers[0].from, accounts[0], "Invalid ask order created");
+    })
+
+    it("Accept ask order", async () => {
+        const erc20Token = await ERC20Token.deployed();
+        const devestOne = await DevestOne.deployed();
+
+        // --- before
+        const fundsOwnerBefore = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
+
+        // fetch orders
+        const pricePerShare = 40000000;
+        const amountOfShares = 2;
+        const totalPrice = pricePerShare * amountOfShares;
+        const escrow = totalPrice + ((totalPrice) * 0.1); // totalPrice + tax (10%)
+
+        await erc20Token.approve(devestOne.address, escrow, { from: accounts[3] });
+        const orders = await devestOne.getOrders.call();
+        await devestOne.accept(orders[0].from, 2, { from: accounts[3], value: 100000000 });
+
+        // check if tax was paid
+        const taxReceiver = (await erc20Token.balanceOf(accounts[1])).toNumber();
+        assert.equal(taxReceiver, 158000000, "Invalid funds on player after buy order");
+
+        // check if owner got funds back
+        const fundsOwnerAfter = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
+        assert.equal(fundsOwnerAfter, fundsOwnerBefore + (40000000 * 2), "Seller (owner) received invalid amount for swap");
+
+        // no more funds on tangible ( all spend )
+        const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
+        assert.equal(fundsTangible, 0, "Invalid funds on tangible after accept");
+
+        const balance = (await devestOne.getBalance.call()).toNumber();
+        assert.equal(fundsTangible, balance, "Funds and balance should be same");
+
+        const price = (await devestOne.getPrice.call()).toNumber();
+        assert.equal(price, 40000000, "Invalid price, in PreSale phase");
+
+        const shareOwner = (await devestOne.getShares.call(accounts[0])).toNumber();
+        const share3 = (await devestOne.getShares.call(accounts[3])).toNumber();
+        assert.equal(shareOwner, 48, "Invalid share of staker");
+        assert.equal(share3, 2, "Invalid share of staker");
+    });
+
     it('Add more buy orders', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
@@ -111,88 +166,85 @@ contract('DevestOne', (accounts) => {
         const price = (await devestOne.getPrice.call()).toNumber();
 
         // submit bid
-        await createBid(20, price, accounts[3]);
-        await createBid(10, price * 1.5, accounts[4]);
-        await createBid(20, price * 2, accounts[5]);
-        await createBid(20, price * 0.5, accounts[6]);
+        await createBid(20, price, accounts[4]);
+        await createBid(10, price * 1.5, accounts[5]);
+        await createBid(20, price * 2, accounts[6]);
+        await createBid(20, price * 0.5, accounts[7]);
+
+        let totalEscrow = 20 * price + (10 * price * 1.5) + (20 * price * 2) + (20 * price * 0.5);
+        totalEscrow += (totalEscrow * 10) / 100;
 
         // tangible funds should increase
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        assert.equal(fundsTangible, 5950125000, "Invalid funds submitting buy orders");
+        assert.equal(fundsTangible, totalEscrow, "Invalid funds submitting buy orders");
 
         const orders = await devestOne.getOrders.call();
-        assert.equal(orders.length, 4, "Order not stored");
-        assert.equal(orders[3].price, 15375000, "Order has invalid price");
+        assert.equal(orders.length, 5, "Order not stored");
+        assert.equal(orders[3].price, 80000000, "Order has invalid price");
     })
 
     it('Accept bids', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
 
-        let fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        let fundsPlayer = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
+        let fundsTangible = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
         let fundsOwner = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
-        let value = (await devestOne.getBalance.call()).toNumber();
         let earningOnwer = 0;
 
         // fetch offers
         const offers = await devestOne.getOrders.call();
-        await devestOne.accept(offers[0].from, 20, { from: accounts[0] });
 
-        fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        value = (await devestOne.getBalance.call()).toNumber();
-        fundsPlayer = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
+        // --- accept #1
+
+        await devestOne.accept(offers[1].from, 20, { from: accounts[0] });
+        fundsTangible = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
         earningOnwer += ((await erc20Token.balanceOf.call(accounts[0])).toNumber() - fundsOwner);
         fundsOwner = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
-        assert.equal(fundsPlayer, 105750000, "Invalid tax paid to player");
+        assert.equal(earningOnwer, 800000000, "Invalid tax paid to player");
 
-        await devestOne.accept(offers[1].from, 10, { from: accounts[0] });
-
-        fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        value = (await devestOne.getBalance.call()).toNumber();
-        fundsPlayer = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
-        earningOnwer += ((await erc20Token.balanceOf.call(accounts[0])).toNumber() - fundsOwner);
-        fundsOwner = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
-        assert.equal(fundsPlayer, 128812500, "Invalid tax paid to player");
+        // --- accept #2
 
         await devestOne.accept(offers[2].from, 10, { from: accounts[0] });
-
-        fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        value = (await devestOne.getBalance.call()).toNumber();
-        fundsPlayer = (await erc20Token.balanceOf(accounts[1])).toNumber();
+        fundsTangible = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
         earningOnwer += ((await erc20Token.balanceOf.call(accounts[0])).toNumber() - fundsOwner);
         fundsOwner = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
-        assert.equal(fundsPlayer, 159562500, "Invalid funds on player after bid");
+        assert.equal(earningOnwer, 1400000000, "Invalid tax paid to player");
+
+        // --- accept #3
+
+        await devestOne.accept(offers[3].from, 10, { from: accounts[0] });
+
+        fundsTangible = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
+        earningOnwer += ((await erc20Token.balanceOf.call(accounts[0])).toNumber() - fundsOwner);
+        fundsOwner = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
+        assert.equal(earningOnwer, 2200000000, "Invalid funds on player after bid");
+
+        // --- leftover escrow
 
         fundsTangible = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
-        const total = 43000000000 + 3159562500;
-        //assert.equal(fundsTangible, total, "Invalid funds on tangible after accept");
-    });
+        const total = 683780000000;
+        assert.equal(fundsTangible, total, "Invalid funds on tangible after accept");
 
-    it('Accept bid, which is lower then price', async () => {
-        const erc20Token = await ERC20Token.deployed();
-        const devestOne = await DevestOne.deployed();
+        // --- all shareholders
+        const shareholders = await devestOne.getShareholders.call();
+        assert.equal(shareholders[0], accounts[0], "Invalid shares");
+        const sharesOnwner = 48 - 20 - 10 - 10;
+        assert.equal((await devestOne.getShares.call(accounts[0])).toNumber(), sharesOnwner, "Invalid shares");
 
-        let fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        let fundsPlayer = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
-        let fundsOwner = (await erc20Token.balanceOf.call(accounts[2])).toNumber();
-        let value = (await devestOne.getBalance.call()).toNumber();
+        assert.equal(shareholders[1], accounts[2], "Invalid shares");
+        assert.equal((await devestOne.getShares.call(accounts[2])).toNumber(), 50, "Invalid shares");
 
-        // accept offer
-        const offers = await devestOne.getOrders.call();
-        await devestOne.accept(offers[0].from, 10, { from: accounts[2] });
+        assert.equal(shareholders[2], accounts[3], "Invalid shares");
+        assert.equal((await devestOne.getShares.call(accounts[3])).toNumber(), 2, "Invalid shares");
 
-        let fundsTangibleAfter = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        assert.equal(fundsTangibleAfter, 4012875000, "Invalid funds on tangible");
+        assert.equal(shareholders[3], accounts[4], "Invalid shares");
+        assert.equal((await devestOne.getShares.call(accounts[4])).toNumber(), 20, "Invalid shares");
 
-        let fundsPlayerAfter = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
-        assert.equal(fundsPlayerAfter, 167250000, "Invalid funds on tangible");
+        assert.equal(shareholders[4], accounts[5], "Invalid shares");
+        assert.equal((await devestOne.getShares.call(accounts[5])).toNumber(), 10, "Invalid shares");
 
-        let fundsOwnerAfter = (await erc20Token.balanceOf.call(accounts[2])).toNumber();
-        assert.equal(fundsOwnerAfter, 38503750000, "Invalid funds on tangible");
-
-        let valueAfter = (await devestOne.getBalance.call()).toNumber();
-        assert.equal(valueAfter, 3167250000, "Invalid funds on tangible");
+        assert.equal(shareholders[5], accounts[6], "Invalid shares");
+        assert.equal((await devestOne.getShares.call(accounts[6])).toNumber(), 10, "Invalid shares");
     });
 
     it('Cancel offer, and get escrow back', async () => {
@@ -202,147 +254,86 @@ contract('DevestOne', (accounts) => {
         let orders = await devestOne.getOrders.call();
 
         let fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        let fundsOwner = (await erc20Token.balanceOf.call(accounts[6])).toNumber();
+        let fundsOrder6Before = (await erc20Token.balanceOf.call(accounts[6])).toNumber();
+        let fundsOrder7Before = (await erc20Token.balanceOf.call(accounts[7])).toNumber();
 
         // has 10 amount left in offer
-        await devestOne.cancel({ from: accounts[5] });
+        try {
+            await devestOne.cancel({from: accounts[5]});
+        } catch (ex){
+            assert.equal(ex.message, "Returned error: VM Exception while processing transaction: revert No open bid -- Reason given: No open bid.");
+        }
+        await devestOne.cancel({ from: accounts[0] });
         await devestOne.cancel({ from: accounts[6] });
+        await devestOne.cancel({ from: accounts[7] });
 
+        // 1200000000
         // check offers
         orders = await devestOne.getOrders.call();
         assert.equal(orders.length, 0, "Offers was not cancelled");
 
         let fundsTangibleAfter = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        let fundsOwnerAfter = (await erc20Token.balanceOf.call(accounts[6])).toNumber();
+        assert.equal(fundsTangibleAfter, 0, "Escrow not returned");
 
-        assert.equal(fundsTangibleAfter, 3167250000, "Escrow not returned");
+        let fundsOrder6After = (await erc20Token.balanceOf.call(accounts[6])).toNumber();
+        // for account 6
+        // price was 400000 * 20, 10 been soled
+        const escrow6 = (40000000 * 2 * 10) * 1.1;
+        assert.equal(fundsOrder6Before + escrow6, fundsOrder6After, "Escrow not returned");
+
+        let fundsOrder7After = (await erc20Token.balanceOf.call(accounts[7])).toNumber();
+        // for acocunt 7
+        // price was 4000000 * 0.5
+        const escrow7 = (40000000 * 0.5 * 20) * 1.1;
+        assert.equal(fundsOrder7Before + escrow7, fundsOrder7After, "Escrow not returned");
     });
 
-    it('Submit ask order', async () => {
+    it('Pay', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
 
-        const price = (await devestOne.getPrice.call()).toNumber();
-
-        // test to submit sell order without having shares
-        try {
-            await devestOne.offer(price * 0.5, 20, { from: accounts[7] });
-        } catch (ex) {
-            assert.equal(ex.reason, "No shares available", "Should fail");
+        // collect current funds of shareholders before dividends are paid
+        const shareholders = await devestOne.getShareholders.call();
+        const shareHoldersFunds = [];
+        for(let shareholder of shareholders){
+            shareHoldersFunds.push({
+                address: shareholder,
+                balance: (await erc20Token.balanceOf.call(shareholder)).toNumber(),
+                shares: (await devestOne.getShares.call(shareholder)).toNumber(),
+            });
         }
 
-        // check current amount of shares
-        let currentShares = (await devestOne.getShare.call(accounts[2])).toNumber();
-        assert.equal(currentShares, 40, "Escrow not returned");
+        // disburse
+        await erc20Token.approve(devestOne.address, 200000000, { from: accounts[1] })
+        await devestOne.disburse(200000000, { from: accounts[1] });
 
-        // offer shares
-        await devestOne.offer(price * 0.5, 20, { from: accounts[2] });
-
-        // get orders
-        const orders = await devestOne.getOrders.call();
-        assert.equal(orders[0].amount, 20, "Order not booked");
-    });
-
-    it('Accept sell order', async () => {
-        const erc20Token = await ERC20Token.deployed();
-        const devestOne = await DevestOne.deployed();
-
-        const price = (await devestOne.getPrice.call()).toNumber();
-        const cost = (price * 0.5) * 10;
-        const taxAndContribution = cost * 0.10;
-
-        const fundsTangibleBefore = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        const fundsPlayerBefore = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
-        const fundsOwnerBefore = (await erc20Token.balanceOf.call(accounts[2])).toNumber();
-        const shareOwnerBefore = (await devestOne.getShare.call(accounts[2])).toNumber();
-        const fundsBuyerBefore = (await erc20Token.balanceOf.call(accounts[7])).toNumber();
-        const balanceBefore = (await devestOne.getBalance.call()).toNumber();
-
-        await erc20Token.approve(devestOne.address, cost + taxAndContribution, { from: accounts[7] });
-        await devestOne.acceptOffer(accounts[2], 10, { from: accounts[7] });
-
+        // TST should be empty
         const fundsTangibleAfter = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        assert.equal(fundsTangibleAfter, fundsTangibleBefore + (taxAndContribution / 2), "Invalid funds on TST");
+        assert.equal(fundsTangibleAfter, 0, "Disburse failed TST Balance invalid");
 
-        const fundsPlayerAfter = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
-        assert.equal(fundsPlayerAfter, fundsPlayerBefore + (taxAndContribution / 2), "Invalid funds on Player");
-
-        const fundsOwnerAfter = (await erc20Token.balanceOf.call(accounts[2])).toNumber();
-        assert.equal(fundsOwnerAfter, fundsOwnerBefore + cost, "Invalid funds on Seller");
-
-        const shareOwnerAfter = (await devestOne.getShare.call(accounts[2])).toNumber();
-        assert.equal(shareOwnerAfter, shareOwnerBefore - 10, "Shares not taken of Seller");
-
-        const fundsBuyerAfter = (await erc20Token.balanceOf.call(accounts[7])).toNumber();
-        assert.equal(fundsBuyerAfter, fundsBuyerBefore - cost - taxAndContribution, "Invalid funds on Buyer (Paid to less?)");
-
-        const balanceAfter = (await devestOne.getBalance.call()).toNumber();
-        assert.equal(balanceAfter, fundsTangibleAfter, "TST Balance not equal actual Balance");
-
-        // check shares
-        const sellerShares = (await devestOne.getShare.call(accounts[2])).toNumber();
-        const buyerShares = (await devestOne.getShare.call(accounts[7])).toNumber();
-        assert.equal(sellerShares, 30, "Seller has not less shares after sale");
-        assert.equal(buyerShares, 10, "Buyer didn't receiver shares");
-    });
-
-    it('Disburse funds', async () => {
-        const erc20Token = await ERC20Token.deployed();
-        const devestOne = await DevestOne.deployed();
-
-        const fundsTangibleBefore = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-
-        await erc20Token.approve(devestOne.address, 100000000, { from: accounts[0] })
-        await devestOne.disburse(100000000, { from: accounts[0] });
-
-        // WRONG => Now all owners should have higher balance but tangible should be empty.
-        const fundsTangibleAfter = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        const value = (await devestOne.getBalance.call()).toNumber();
-        const price = (await devestOne.getPrice.call()).toNumber();
-
-        assert.equal(fundsTangibleAfter, fundsTangibleBefore + 100000000, "Disburse failed TST Balance invalid");
-        assert.equal(fundsTangibleAfter, value, "Disburse failed - Balance not match");
-        assert.equal(price, Math.round(fundsTangibleAfter / 100), "Disburse failed");
+        // check dividends
+        for(let shareholder of shareHoldersFunds){
+            const after = (await erc20Token.balanceOf.call(shareholder.address)).toNumber();
+            const d = (shareholder.shares *  200000000) / 100;
+            assert.equal(shareholder.balance + d, after, "Invalid dividends disbursed");
+        }
     })
 
     it('Terminate Share', async () => {
         const erc20Token = await ERC20Token.deployed();
         const devestOne = await DevestOne.deployed();
 
-        // check all holders
-        const shares = [];
-        const sharesP = [];
-        const shareholders = await devestOne.getShareholders.call();
-        let shareSummary = 0;
-        let pSummary = 0;
-        for (let share of shareholders) {
-            const amount = (await erc20Token.balanceOf.call(share)).toNumber();
-            shares.push(amount);
-            shareSummary += amount;
-
-            const p = (await devestOne.getShare.call(share)).toNumber();
-            sharesP.push(p);
-            pSummary += p;
-        }
-
-        const totalBalance = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        //assert.equal(totalBalance, shareSummary, "Invalid Balance or Shares");
-
-        // terminate
+        // call terminate until 50% reached
         await devestOne.terminate({ from: accounts[0] });
+        await devestOne.terminate({ from: accounts[3] });
+        await devestOne.terminate({ from: accounts[4] });
 
-        // check balances in share
-        const fundsTangibleAfter = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
-        assert.ok(fundsTangibleAfter < 1000, "Tangible shouldn't have anymore funds");
+        let state = await devestOne.isTerminated.call();
+        assert.equal(state, false, "Contract should not be terminated (to less votes)");
 
-        const offers = await devestOne.getOrders.call();
-
-        let index = 0;
-        for (let share of shareholders) {
-            const balance = (await erc20Token.balanceOf.call(share)).toNumber();
-            const before = shares[index];
-        }
-
+        await devestOne.terminate({ from: accounts[2] });
+        state = await devestOne.isTerminated.call();
+        assert.equal(state, true, "Contract should be terminated");
     });
 
 });

@@ -4,7 +4,7 @@ pragma solidity ^0.8.4;
 import "./libs/IERC20.sol";
 import "./ITangibleStakeToken.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "./ERC721Metadata.sol";
+import "./libs/ERC721Metadata.sol";
 
 // DeVest Investment Model One
 // Bid & Offer
@@ -14,7 +14,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     event swapped(address indexed from, address indexed to, uint256 share);
 
     // When new buy order was submitted and awaits acceptance
-    event ordered(address indexed from, uint256 price, uint256 amount, bool buy);
+    event ordered(address indexed from, uint256 price, uint256 amount, bool bid);
 
     event leftOver(uint256 leftover);
 
@@ -52,7 +52,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         uint256 amount;
         address from;
         uint256 escrow;
-        bool buy; // buy = true | sell = false
+        bool bid; // buy = true | sell = false
     }
     mapping (address => Order) private orders;
     address[] private orderAddresses;
@@ -65,6 +65,10 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     // metadata
     string _name;
     string _symbol;
+
+    // voting (terminatian and tengible)
+    mapping (address => bool) terminationVote;
+    mapping (address => address) tangibleVote;
 
     // Set owner and DI OriToken
     constructor(address tokenAddress, string memory __name, string memory __symbol) {
@@ -95,13 +99,17 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     /**
     *  Update stored bids, if bid was spend, remove from list
     */
-    function deductAmountfromOrder(address orderOwner, uint256 amount) internal { 
+    function deductAmountfromOrder(address orderOwner, uint256 amount) internal returns (uint256) {
         require(orders[orderOwner].amount >= amount, "Insufficient funds");
 
         orders[orderOwner].amount -= amount;
         uint256 totalPrice = orders[orderOwner].price * amount;
-        uint256 escrowDeduct = totalPrice + ((totalPrice * tangibleTax) / 100);
-        orders[orderOwner].escrow = orders[orderOwner].escrow - escrowDeduct;
+
+        // in case of bid deduct escrow
+        if (orders[orderOwner].bid == true){
+            uint256 escrowDeduct = totalPrice + ((totalPrice * tangibleTax) / 100);
+            orders[orderOwner].escrow -= escrowDeduct;
+        }
 
         if (orders[orderOwner].amount == 0){
             require(orders[orderOwner].escrow == 0, 'Escrow leftover'); // ????????????? WHAT IS THE PURPOSE OF THIS 
@@ -113,6 +121,8 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
             orderAddresses[index] = orderAddresses[orderAddresses.length-1];
             orderAddresses.pop();
         }
+
+        return 0;
     }
 
     function swapShares(address to, address from, uint256 amount) internal {
@@ -168,19 +178,12 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         return true;
     }
 
-    function ask(uint256 price, uint256 amount) public override _isActive {
-        bool test = true;
-    }
 
-/**
-    TODO: split tax options:  
-        1. buyer pays tax
-        2. seller pays
-        3. split tax
- */
-    // Bid for shares
-    function bid(uint256 price, uint256 amount) public virtual override nonReentrant _isActive returns (bool) {
-        require(amount > 0, 'Invalid amount submitted');
+    /**
+    *  Bid for purchase
+    */
+    function bid(uint256 price, uint256 amount) public virtual override nonReentrant _isActive {
+        require(amount > 0 && amount <= 100, 'Invalid amount submitted');
         require(price > 0, 'Invalid price submitted');
         require(orders[_msgSender()].amount == 0, 'Active bid, cancel first');
 
@@ -200,33 +203,36 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         _token.transferFrom(_msgSender(), address(this), _escrow);
 
         emit ordered(_msgSender(), price, amount, true);
-
-        return true;
     }
 
-    // Offer shares for a specific price
-    function offer(uint256 price, uint256 amount) public virtual _isActive {
-        require(amount > 0, 'Invalid amount submitted');
+    /**
+     *  Ask for sell
+     */
+    function ask(uint256 price, uint256 amount) public override nonReentrant _isActive {
+        require(amount > 0 && amount <= 100, 'Invalid amount submitted');
         require(price > 0, 'Invalid price submitted');
+        require(shares[_msgSender()]  > 0, 'Insufficient shares');
         require(orders[_msgSender()].amount == 0, 'Active order, cancel first');
-        require(getShare(_msgSender()) > 0, 'No shares available');
 
         // store bid
-        Order memory _order = Order(price, amount, _msgSender(), 0, false);
-        orders[_msgSender()] = _order;
+        Order memory _ask = Order(price, amount, _msgSender(), 0, false);
+        orders[_msgSender()] = _ask;
         orderAddresses.push(_msgSender());
 
-        // pull escrow
         emit ordered(_msgSender(), price, amount, false);
     }
 
-    function accept(address orderOwner, uint256 amount) external payable override _isActive {
+    /**
+     *  Accept order
+     */
+    function accept(address orderOwner, uint256 amount) external payable override _isActive returns (uint256) {
         require(amount > 0, "Invalid amount submitted");
         require(orders[orderOwner].amount >= amount, "Invalid order");
+        require(_msgSender() != orders[orderOwner].from, "Can't accept your own order");
 
         // check for fee and transfer to owner
-        require(msg.value > 10000000, "Please provide enough fee");
-        payable(publisher).transfer(msg.value);
+        //require(msg.value > 10000000, "Please provide enough fee");
+        //payable(publisher).transfer(msg.value);
 
         Order memory order = orders[orderOwner];
 
@@ -235,26 +241,25 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         uint256 tax = (cost * tangibleTax) / 100;
 
         uint256 totalCost = cost + tax;
+
         // accepting on sell order
-        if (order.buy == false) {
+        if (order.bid == false) {
             // what the buyer needs to pay (including taxes)
             _token.transferFrom(_msgSender(), address(this), totalCost);
             _token.transfer(order.from, cost);
         } else {
-            // accepting buy order
-            // so caller is accepting to sell his share to order owner -> order owner is paying to caller
-            _token.transferFrom(orderOwner, address(this), totalCost);
+            // accepting bid order
+            // so caller is accepting to sell his share to order owner
+            // -> escrow from order can be transferred to owner
             _token.transfer(_msgSender(), cost);
         }
 
         // pay tangible
-        // is this even needed? e.g.  _token.transferFrom(_msgSender(), address(this), totalCost); transfers all, then we move cost to user - isnt tax left on our address?
        _token.transfer(tangibleAddress, tax);
-
 
         // TODO cover different event when accepting bid/ask
         // msg sender is accepting sell order
-        if (order.buy == false) {   
+        if (order.bid == false) {
             swapShares(_msgSender(), orderOwner, amount);
         } else {
             // msg sender is accepting buy order
@@ -264,28 +269,30 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         // update offer
         deductAmountfromOrder(orderOwner, amount);
 
+        // update last transaction price (uint)
+        lastPricePerUnit = order.price;
+
         // TODO cover different event when accepting bid/ask
         emit swapped(_msgSender(), orderOwner, amount);
+
+        return 1;
     }
 
     // Cancel order and return escrow
-    function cancel() public virtual override _isActive() returns (bool) {
-        require(orders[_msgSender()].escrow > 0, 'No open bid');
+    function cancel() public virtual override _isActive() returns (uint256) {
+        require(orders[_msgSender()].amount > 0, 'No open bid');
 
         Order memory _order = orders[_msgSender()];
 
-        if (_order.buy){
+        if (_order.bid){
             // return escrow leftover
             _token.transfer(_msgSender(), _order.escrow);
-
-            // remove escrow
-            orders[_msgSender()].escrow -= _order.escrow;
         }
 
         // update bids
-        deductAmountfromOrder(_msgSender(), _order.amount);
+        return deductAmountfromOrder(_msgSender(), _order.amount);
 
-        return true;
+        return 1;
     }
 
     // Set the tangible address (for emergency, if player wallet spoofed)
@@ -296,46 +303,50 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         return true;
     }
 
-    // Used to add value to tangible
+    // Pay usage charges
     function disburse(uint256 amount) public _isActive() returns (bool){
         require(initialized, 'Tangible was not initialized');
         require(!terminated, 'Share was terminated');
         require(amount > 0, 'Invalid amount provided');
 
-        // TODO Disburse amount send, and alos amount collected from contributionTax
-
-        // check if enough escrow allowed
+        // check if enough escrow allowed and pull
         require(_token.allowance(_msgSender(), address(this)) >= amount, 'Insufficient allowance provided');
-
-        // pull escrow
         _token.transferFrom(_msgSender(), address(this), amount);
-        balance += amount;
+
+        // distribute to shareholders
+        for(uint256 i=0;i<shareholders.length;i++)
+            _token.transfer(shareholders[i], (shares[shareholders[i]] * amount) / 100);
 
         return true;
     }
 
     // Terminate this contract, and pay-out all remaining investors
     function terminate() public override _isActive() returns (bool) {
-        require(publisher == msg.sender, 'Only owner can terminate');
+        require(shares[_msgSender()] > 0, 'Only shareholders can vote for termination');
 
-        uint256 price = getPrice();
+        // set senders vote
+        terminationVote[_msgSender()] = true;
 
-        // transfer to all their shares
-        for(uint256 i=0;i<shareholders.length;i++)
-            _token.transfer(shareholders[i], shares[shareholders[i]] * price);
-
-        // cancel bids
-        for(uint256 i=0;i< orderAddresses.length;i++){
-            _token.transfer(orderAddresses[i], orders[orderAddresses[i]].escrow);
-            escrow -= orders[orderAddresses[i]].escrow;
-            orders[orderAddresses[i]].amount = 0;
-            orders[orderAddresses[i]].escrow = 0;
+        // calculate current amount of votes based on shareholders share
+        uint256 totalVotePercentage = 0;
+        for(uint256 i=0;i<shareholders.length;i++){
+            if (terminationVote[shareholders[i]]){
+                totalVotePercentage += shares[shareholders[i]];
+            }
         }
 
-        terminated = true;
+        // terminate contract
+        if (totalVotePercentage > 50)
+            terminated = true;
 
-        return true;
+        return terminated;
     }
+
+
+    // ----------------------------------------------------------------------------------------------------------
+    // -------------------------------------------- PUBLIC GETTERS ----------------------------------------------
+    // ----------------------------------------------------------------------------------------------------------
+
 
     // Get orders (open)
     function getOrders() public view returns (Order[] memory) {
@@ -350,12 +361,16 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     }
 
     // Get shares of one investor
-    function getShare(address _owner) public view returns (uint256) {
+    function getShares(address _owner) public view returns (uint256) {
         return shares[_owner];
     }
 
     function balanceOf(address _owner) public view returns (uint256) {
         return shares[_owner];
+    }
+
+    function isTerminated() public view returns (bool){
+        return terminated;
     }
 
     // Get total balance of locked $ORI
@@ -381,13 +396,19 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         return tangibleTax;
     }
 
+
     /// @notice A descriptive name for a collection of NFTs in this contract
-    function name() external view returns (string memory){
+    function name() external override view returns (string memory){
         return _name;
     }
 
     /// @notice An abbreviated name for NFTs in this contract
-    function symbol() external view returns (string memory){
+    function symbol() external override view returns (string memory){
         return _symbol;
+    }
+
+    /// @notice A distinct Uniform Resource Identifier (URI) from the underlying NFT
+    function tokenURI(uint256 _tokenId) external override view returns (string memory){
+        return "";
     }
 }

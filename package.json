@@ -25,7 +25,5 @@
     "num": "^0.3.0"
   },
   "devDependencies": {
-    "@types/chai": "^4.3.1",
-    "chai": "^4.3.6"
   }
 }
