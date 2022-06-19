@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.12;
 
-import "./libs/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./ITangibleStakeToken.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "./libs/ERC721Metadata.sol";
 
 // DeVest Investment Model One
 // Bid & Offer
-contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
+contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
     // When an shareholder exchanged his shares
     event swapped(address indexed from, address indexed to, uint256 share);
@@ -16,35 +15,41 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     // When new buy order was submitted and awaits acceptance
     event ordered(address indexed from, uint256 price, uint256 amount, bool bid);
 
+    // When payment was received
+    event payment(address indexed from, uint256 amount);
+
+    // When dividends been disbursed
+    event disbursed(uint256 amount);
+
+
     event leftOver(uint256 leftover);
 
-    // reference to deployed $OIR contract
-    IERC20 internal _token;
+    // reference to trading token used in TST
+    ERC20 internal _token;
 
     // Owner of the contract (for admin controls)
     address private publisher;
 
     // contract was terminated and can't be used anymore
-    bool private terminated = false;
+    bool internal terminated = false;
 
     // initialized
-    bool private initialized = false;
+    bool internal initialized = false;
 
-    // initial value
-    uint256 private initialValue = 0;
+    // instantDisburse
+    // Disburse received payments instantly to shareholders
+    // this could be a problem if the token has a high divider,
+    // related to the amount of transactions required !!!
+    bool instantDisburse;
 
     // Last price which was accepted in order book per unit
     uint256 private lastPricePerUnit = 0;
 
     // Shares contributed to the player
     uint256 tangibleTax = 0;
-    uint256 constant contributionTax = 50;
 
     // Address of the tangible
-    address private tangibleAddress;
-
-    // Total balance (locked in $ORI)
-    uint256 private balance;
+    address internal tangibleAddress;
 
     // Offers
     struct Order {
@@ -59,12 +64,13 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     uint256 private escrow;
 
     // Stakes
-    mapping (address => uint256) private shares;
-    address[] private shareholders;
+    mapping (address => uint256) internal shares;
+    address[] internal shareholders;
 
     // metadata
     string _name;
     string _symbol;
+    string _tokenURI;
 
     // voting (terminatian and tengible)
     mapping (address => bool) terminationVote;
@@ -73,7 +79,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     // Set owner and DI OriToken
     constructor(address tokenAddress, string memory __name, string memory __symbol) {
         publisher = _msgSender();
-        _token = ERC20Token(tokenAddress);
+        _token = ERC20(tokenAddress);
         _name = __name;
         _symbol = __symbol;
     }
@@ -99,7 +105,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     /**
     *  Update stored bids, if bid was spend, remove from list
     */
-    function deductAmountfromOrder(address orderOwner, uint256 amount) internal returns (uint256) {
+    function deductAmountfromOrder(address orderOwner, uint256 amount) internal {
         require(orders[orderOwner].amount >= amount, "Insufficient funds");
 
         orders[orderOwner].amount -= amount;
@@ -121,8 +127,6 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
             orderAddresses[index] = orderAddresses[orderAddresses.length-1];
             orderAddresses.pop();
         }
-
-        return 0;
     }
 
     function swapShares(address to, address from, uint256 amount) internal {
@@ -156,18 +160,19 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     // ------------------------------------------------- PUBLIC -------------------------------------------------
     // ----------------------------------------------------------------------------------------------------------
 
-    function initialize(uint256 amount, uint tax) public returns (bool){
+    /**
+     *  Initialize TST as tangible
+     */
+    function initialize(uint256 amount, uint tax, bool _instantDisburse) public returns (bool){
         require(!initialized, 'Tangible already initialized');
-        require(tangibleAddress != address(0), 'Please set tangible address first');
         require(publisher == _msgSender(), 'Only owner can initialize tangibles');
         require(amount >= 100, 'Amount must be bigger than 100');
         require(tax >= 0, 'Invalid tax value');
         require(tax <= 100, 'Invalid tax value');
 
         tangibleTax = tax;
-        initialValue = amount;
-
         lastPricePerUnit = amount / 100;
+        instantDisburse = _instantDisburse;
 
         shareholders.push(_msgSender());
         shares[_msgSender()] = 100;
@@ -178,6 +183,8 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         return true;
     }
 
+    // ----------------------------------------------------------------------------------------------------------
+    // ------------------------------------------------ TRADING -------------------------------------------------
 
     /**
     *  Bid for purchase
@@ -279,7 +286,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
     }
 
     // Cancel order and return escrow
-    function cancel() public virtual override _isActive() returns (uint256) {
+    function cancel() public virtual override _isActive() returns (bool) {
         require(orders[_msgSender()].amount > 0, 'No open bid');
 
         Order memory _order = orders[_msgSender()];
@@ -290,21 +297,13 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         }
 
         // update bids
-        return deductAmountfromOrder(_msgSender(), _order.amount);
+        deductAmountfromOrder(_msgSender(), _order.amount);
 
-        return 1;
-    }
-
-    // Set the tangible address (for emergency, if player wallet spoofed)
-    function setTangible(address _tangibleAddress) public returns (bool) {
-        require(publisher == msg.sender, 'Only owner can set Tangible');
-
-        tangibleAddress = _tangibleAddress;
         return true;
     }
 
     // Pay usage charges
-    function disburse(uint256 amount) public _isActive() returns (bool){
+    function pay(uint256 amount) public override _isActive{
         require(initialized, 'Tangible was not initialized');
         require(!terminated, 'Share was terminated');
         require(amount > 0, 'Invalid amount provided');
@@ -313,11 +312,48 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         require(_token.allowance(_msgSender(), address(this)) >= amount, 'Insufficient allowance provided');
         _token.transferFrom(_msgSender(), address(this), amount);
 
+        // pay tangible tax
+        uint256 tangible = ((tangibleTax * amount) / 100);
+        _token.transfer(tangibleAddress, tangible);
+
+        // disburse if auto disburse
+        if (instantDisburse == true)
+            disburse();
+
+        emit payment(_msgSender(), amount);
+    }
+
+    // Distribute funds on TST to shareholders
+    function disburse () public override _isActive returns (uint256) {
+        uint256 balance = _token.balanceOf(address(this));
+
         // distribute to shareholders
         for(uint256 i=0;i<shareholders.length;i++)
-            _token.transfer(shareholders[i], (shares[shareholders[i]] * amount) / 100);
+            _token.transfer(shareholders[i], (shares[shareholders[i]] * balance) / 100);
 
-        return true;
+        return balance;
+    }
+
+    // Vote for another tangible address (receiver)
+    function setTangible(address _newTangibleAddress) public _isActive returns (address) {
+        require(shares[_msgSender()] > 0, 'Only shareholders can vote for switch tangible');
+
+        // set senders vote
+        tangibleVote[_msgSender()] = _newTangibleAddress;
+
+        // calculate current amount of votes based on shareholders share
+        uint256 totalVotePercentage = 0;
+        for(uint256 i=0;i<shareholders.length;i++){
+            if (tangibleVote[shareholders[i]] == _newTangibleAddress){
+                totalVotePercentage += shares[shareholders[i]];
+            }
+        }
+
+        // terminate contract
+        if (totalVotePercentage > 50)
+            tangibleAddress = _newTangibleAddress;
+
+        return tangibleAddress;
     }
 
     // Terminate this contract, and pay-out all remaining investors
@@ -365,26 +401,22 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         return shares[_owner];
     }
 
+    // wrapper for ERC20 / ERC721 wallet support
     function balanceOf(address _owner) public view returns (uint256) {
-        return shares[_owner];
+        return getShares(_owner);
+    }
+
+    function getTangible() public view returns (address){
+        return tangibleAddress;
     }
 
     function isTerminated() public view returns (bool){
         return terminated;
     }
 
-    // Get total balance of locked $ORI
-    function getBalance() public view returns (uint256) {
-        return balance;
-    }
-
     // Return current price
     function getPrice() public view returns (uint256) {
       return lastPricePerUnit;
-    }
-
-    function getInitialValue() public view returns (uint256){
-        return initialValue;
     }
 
     // Get shareholder addresses
@@ -396,19 +428,18 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard, ERC721Metadata {
         return tangibleTax;
     }
 
-
-    /// @notice A descriptive name for a collection of NFTs in this contract
+    /// @notice A descriptive name of this Tangible Token
     function name() external override view returns (string memory){
         return _name;
     }
 
-    /// @notice An abbreviated name for NFTs in this contract
+    /// @notice An abbreviated name expressing the share
     function symbol() external override view returns (string memory){
-        return _symbol;
+        return string.concat("% ", _symbol);
     }
 
-    /// @notice A distinct Uniform Resource Identifier (URI) from the underlying NFT
-    function tokenURI(uint256 _tokenId) external override view returns (string memory){
-        return "";
+    /// @notice A distinct Uniform Resource Identifier (URI)
+    function tokenURI() external override view returns (string memory){
+        return _tokenURI;
     }
 }
