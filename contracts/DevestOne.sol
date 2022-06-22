@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.12;
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./ITangibleStakeToken.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC20PresetFixedSupply} from "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 // DeVest Investment Model One
@@ -20,7 +21,6 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
     // When dividends been disbursed
     event disbursed(uint256 amount);
-
 
     event leftOver(uint256 leftover);
 
@@ -72,13 +72,13 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     string _symbol;
     string _tokenURI;
 
-    // voting (terminatian and tengible)
+    // voting (termination and tangible)
     mapping (address => bool) terminationVote;
     mapping (address => address) tangibleVote;
 
     // Set owner and DI OriToken
-    constructor(address tokenAddress, string memory __name, string memory __symbol) {
-        publisher = _msgSender();
+    constructor(address tokenAddress, string memory __name, string memory __symbol, address owner) {
+        publisher = owner;
         _token = ERC20(tokenAddress);
         _name = __name;
         _symbol = __symbol;
@@ -189,7 +189,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     /**
     *  Bid for purchase
     */
-    function bid(uint256 price, uint256 amount) public virtual override nonReentrant _isActive {
+    function bid(uint256 price, uint256 amount) public virtual override nonReentrant _isActive{
         require(amount > 0 && amount <= 100, 'Invalid amount submitted');
         require(price > 0, 'Invalid price submitted');
         require(orders[_msgSender()].amount == 0, 'Active bid, cancel first');
@@ -232,13 +232,13 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     /**
      *  Accept order
      */
-    function accept(address orderOwner, uint256 amount) external payable override _isActive returns (uint256) {
+    function accept(address orderOwner, uint256 amount) external override payable _isActive returns (uint256) {
         require(amount > 0, "Invalid amount submitted");
         require(orders[orderOwner].amount >= amount, "Invalid order");
         require(_msgSender() != orders[orderOwner].from, "Can't accept your own order");
 
         // check for fee and transfer to owner
-        //require(msg.value > 10000000, "Please provide enough fee");
+        require(msg.value >= 10000000, "Please provide enough fee");
         //payable(publisher).transfer(msg.value);
 
         Order memory order = orders[orderOwner];
@@ -307,6 +307,9 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         require(initialized, 'Tangible was not initialized');
         require(!terminated, 'Share was terminated');
         require(amount > 0, 'Invalid amount provided');
+
+        // charge fee
+        //require(msg.value >= 10000000, "Please provide enough fee");
 
         // check if enough escrow allowed and pull
         require(_token.allowance(_msgSender(), address(this)) >= amount, 'Insufficient allowance provided');
@@ -442,4 +445,5 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     function tokenURI() external override view returns (string memory){
         return _tokenURI;
     }
+
 }

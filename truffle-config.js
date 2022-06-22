@@ -8,7 +8,15 @@ module.exports = {
 
     compilers: {
         solc: {
-            version: "0.8.12"
+            version: "0.8.12",
+            docker: false,
+            settings: {
+                optimizer: {
+                    enabled: true,
+                    runs: 200
+                },
+                evmVersion: "byzantium"
+            }
         }
     },
 

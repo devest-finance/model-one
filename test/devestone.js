@@ -1,5 +1,5 @@
 const DevestOne = artifacts.require("DevestOne");
-const ERC20 = artifacts.require("ERC20");
+const ERC20 = artifacts.require("ERC20PresetFixedSupply");
 
 contract('DevestOne', (accounts) => {
 
