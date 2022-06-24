@@ -21,9 +21,9 @@
   "homepage": "https://github.com/devest-finance/model-one#readme",
   "dependencies": {
     "@openzeppelin/contracts": "^4.6.0",
+    "@truffle/hdwallet-provider": "^2.0.9",
     "bintrees": "^1.0.2",
-    "num": "^0.3.0"
-  },
-  "devDependencies": {
+    "num": "^0.3.0",
+    "truffle-contract-size": "^2.0.1"
   }
 }

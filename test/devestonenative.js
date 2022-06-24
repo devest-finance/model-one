@@ -2,6 +2,7 @@ const DevestOneNative = artifacts.require("DevestOneNative");
 const DevestOne = artifacts.require("DevestOne");
 const ERC20 = artifacts.require("ERC20PresetFixedSupply");
 
+/*
 contract('DevestOneNative', (accounts) => {
 
     it('should put 1000000 Token in the first account', async () => {
@@ -174,3 +175,4 @@ const createBid = async (percent, price, address) => {
     await erc20Token.approve(devestOneNative.address, escrow, { from: address });
     await devestOneNative.bid(price, percent, {from: address});
 }
+*/

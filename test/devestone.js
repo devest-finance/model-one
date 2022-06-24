@@ -35,10 +35,14 @@ contract('DevestOne', (accounts) => {
     it('should Setup Tangible', async () => {
         const devestOne = await DevestOne.deployed();
 
+        // check if variables set
+        const name = await devestOne.name.call();
+        assert(name, "Example", "Invalid name on TST");
+
         await devestOne.initialize(3000000000, 10, true, { from: accounts[0] });
         await devestOne.setTangible(accounts[1], { from: accounts[0] });
 
-        const pricePerUnit = (await devestOne.getPrice.call()).toNumber();
+        const pricePerUnit = (await devestOne.price.call()).toNumber();
         assert.equal(pricePerUnit, 3000000000 / 100, "Invalid price on initialized tangible");
     })
 
@@ -87,7 +91,7 @@ contract('DevestOne', (accounts) => {
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
         assert.equal(fundsTangible, 0, "Invalid funds on tangible after accept");
 
-        const price = (await devestOne.getPrice.call()).toNumber();
+        const price = (await devestOne.price.all()).toNumber();
         assert.equal(price, 30000000, "Invalid price, in PreSale phase");
 
         const share = (await devestOne.getShares.call(accounts[2])).toNumber();
@@ -144,7 +148,7 @@ contract('DevestOne', (accounts) => {
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
         assert.equal(fundsTangible, 0, "Invalid funds on tangible after accept");
 
-        const price = (await devestOne.getPrice.call()).toNumber();
+        const price = (await devestOne.price.call()).toNumber();
         assert.equal(price, 40000000, "Invalid price, in PreSale phase");
 
         const shareOwner = (await devestOne.getShares.call(accounts[0])).toNumber();
@@ -157,7 +161,7 @@ contract('DevestOne', (accounts) => {
         const erc20Token = await ERC20.deployed();
         const devestOne = await DevestOne.deployed();
 
-        const price = (await devestOne.getPrice.call()).toNumber();
+        const price = (await devestOne.price.call()).toNumber();
 
         // submit bid
         await createBid(20, price, accounts[4]);
@@ -190,7 +194,7 @@ contract('DevestOne', (accounts) => {
 
         // --- accept #1
 
-        await devestOne.accept(offers[1].from, 20, { from: accounts[0] });
+        await devestOne.accept(offers[1].from, 20, { from: accounts[0], value: 10000000 });
         fundsTangible = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
         earningOnwer += ((await erc20Token.balanceOf.call(accounts[0])).toNumber() - fundsOwner);
         fundsOwner = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
@@ -198,7 +202,7 @@ contract('DevestOne', (accounts) => {
 
         // --- accept #2
 
-        await devestOne.accept(offers[2].from, 10, { from: accounts[0] });
+        await devestOne.accept(offers[2].from, 10, { from: accounts[0], value: 10000000 });
         fundsTangible = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
         earningOnwer += ((await erc20Token.balanceOf.call(accounts[0])).toNumber() - fundsOwner);
         fundsOwner = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
@@ -206,7 +210,7 @@ contract('DevestOne', (accounts) => {
 
         // --- accept #3
 
-        await devestOne.accept(offers[3].from, 10, { from: accounts[0] });
+        await devestOne.accept(offers[3].from, 10, { from: accounts[0], value: 10000000 });
 
         fundsTangible = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
         earningOnwer += ((await erc20Token.balanceOf.call(accounts[0])).toNumber() - fundsOwner);
@@ -322,11 +326,11 @@ contract('DevestOne', (accounts) => {
         await devestOne.setTangible(accounts[2], { from: accounts[3] });
         await devestOne.setTangible(accounts[2], { from: accounts[4] });
 
-        let address = await devestOne.getTangible.call();
+        let address = await devestOne.tangibleAddress.call();
         assert.equal(address, accounts[1], "Contract should still have same tangible");
 
         await devestOne.setTangible(accounts[2], { from: accounts[2] });
-        address = await devestOne.getTangible.call();
+        address = await devestOne.tangibleAddress.call();
         assert.equal(address, accounts[2], "Tangible after vote not updated");
     });
 
@@ -339,11 +343,11 @@ contract('DevestOne', (accounts) => {
         await devestOne.terminate({ from: accounts[3] });
         await devestOne.terminate({ from: accounts[4] });
 
-        let state = await devestOne.isTerminated.call();
+        let state = await devestOne.terminated.call();
         assert.equal(state, false, "Contract should not be terminated (to less votes)");
 
         await devestOne.terminate({ from: accounts[2] });
-        state = await devestOne.isTerminated.call();
+        state = await devestOne.terminated.call();
         assert.equal(state, true, "Contract should be terminated");
     });
 

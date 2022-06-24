@@ -3,9 +3,6 @@ pragma solidity ^0.8.12;
 
 import "./DevestOne.sol";
 import "./ITangibleStakeToken.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {ERC20PresetFixedSupply} from "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
 // DeVest Investment Model One
 // Bid & Offer
