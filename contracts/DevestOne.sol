@@ -82,7 +82,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     constructor(address tokenAddress, string memory __name, string memory __symbol, address owner) {
         publisher = owner;
         _token = IERC20(tokenAddress);
-        name = __name;
+        name = string(abi.encodePacked("% ", __name));
         symbol = __symbol;
     }
 
@@ -263,8 +263,9 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
             _token.transfer(_msgSender(), cost);
         }
 
-        // pay tangible
-       _token.transfer(tangibleAddress, tax);
+        // pay tangibles
+        if (tax != 0)
+            _token.transfer(tangibleAddress, tax);
 
         // TODO cover different event when accepting bid/ask
         // msg sender is accepting sell order
@@ -399,6 +400,11 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         }
 
         return _orders;
+    }
+
+    // Get shares of one investor
+    function balanceOf(address _owner) public view returns (uint256) {
+        return shares[_owner];
     }
 
     // Get shares of one investor
