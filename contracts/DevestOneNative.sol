@@ -6,6 +6,7 @@ import "./ITangibleStakeToken.sol";
 
 // DeVest Investment Model One
 // Bid & Offer
+// Implements Native Token support
 contract DevestOneNative is DevestOne {
 
     // Set owner and DI OriToken
@@ -13,32 +14,21 @@ contract DevestOneNative is DevestOne {
         DevestOne(tokenAddress ,__name, __symbol, owner) {
     }
 
-    function payNative() public payable _isActive{
-        require(initialized, 'Tangible was not initialized');
-        require(!terminated, 'Share was terminated');
-        require(msg.value > 0, 'Invalid amount provided');
-
-        // pay tangible tax
-        uint256 tangible = ((tangibleTax * msg.value) / 100);
-        payable(tangibleAddress).transfer(tangible);
-
-        // check if enough
-        emit payment(_msgSender(), msg.value);
-
-        if (instantDisburse)
-            disburseNative();
+    /**
+     *  Internal token transfer helper
+     */
+    function __transfer(address receiver, uint256 amount) override internal {
+        payable(receiver).transfer(amount);
     }
 
-    // Distribute the balance in native tokens will be disbursed to all shareholders
-    function disburseNative() public _isActive returns (uint256) {
-        uint256 balance = payable(address(this)).balance;
-
-        // pay shareholders
-        for(uint256 i=0;i<shareholders.length;i++)
-            payable(shareholders[i]).transfer((shares[shareholders[i]] * balance) / 100);
-
-        return balance;
+    /**
+     *  Internal token transfer helper
+     *  In case of native transaction the amount was submitted with
+     *  the transaction is available on the contract
+     *  => no action required
+     */
+    function __transferFrom(address sender, address receiver, uint256 amount) override internal {
+        //_token.transferFrom(sender, receiver, amount);
     }
-
 
 }

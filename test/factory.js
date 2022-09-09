@@ -1,6 +1,7 @@
 const DevestFactory = artifacts.require("DevestFactory");
 const DevestOne = artifacts.require("DevestOne");
 
+/*
 contract("DeVestFactory", function (accounts) {
 
     describe.only("deploy contract", async () => {
@@ -38,3 +39,4 @@ contract("DeVestFactory", function (accounts) {
 
     });
 });
+*/

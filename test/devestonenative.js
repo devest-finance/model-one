@@ -1,34 +1,28 @@
 const DevestOneNative = artifacts.require("DevestOneNative");
 const DevestOne = artifacts.require("DevestOne");
-const ERC20 = artifacts.require("ERC20PresetFixedSupply");
 
 /*
 contract('DevestOneNative', (accounts) => {
 
     it('should put 1000000 Token in the first account', async () => {
-        const ERC20TokenInstance = await ERC20.deployed();
-        const balance = await ERC20TokenInstance.balanceOf.call(accounts[0]);
-
         const balanceAccount = await web3.eth.getBalance(accounts[0]);
 
-        assert.isTrue(balance.valueOf() > 0, "To less token");
         assert.isTrue(Number(balanceAccount) > 0)
     });
 
     it('should transfer some ETH Token to all traders', async () => {
-        const erc20Token = await ERC20.deployed();
-
         // Setup account.
         const account = accounts[0];
 
         // Make transaction from first account to second.
         for (let i = 2; i < 10; i++) {
             const amount = 40000000000;
-            await erc20Token.transfer(accounts[i], amount, { from: account });
+            //await web3.eth.sendTransaction(accounts[i], amount, { from: account });
+            await web3.eth.sendTransaction({to:accounts[i], from:account, value: web3.utils.toWei(amount)})
         }
 
         // Get balances of first and second account after the transactions.
-        const accountOneEndingBalance = (await erc20Token.balanceOf.call(account)).toNumber();
+        const accountOneEndingBalance = (await web3.eth.getBalance(account)).toNumber();
 
         // send back
         assert.equal(accountOneEndingBalance, 680000000000, "Failed to transfer funds");

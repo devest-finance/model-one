@@ -1,6 +1,7 @@
 const DevestOne = artifacts.require("DevestOne");
 const ERC20 = artifacts.require("ERC20PresetFixedSupply");
 
+
 contract('DevestOne', (accounts) => {
 
     it('should put 1000000 Token in the first account', async () => {
@@ -91,7 +92,7 @@ contract('DevestOne', (accounts) => {
         const fundsTangible = (await erc20Token.balanceOf.call(devestOne.address)).toNumber();
         assert.equal(fundsTangible, 0, "Invalid funds on tangible after accept");
 
-        const price = (await devestOne.price.all()).toNumber();
+        const price = (await devestOne.price.call()).toNumber();
         assert.equal(price, 30000000, "Invalid price, in PreSale phase");
 
         const share = (await devestOne.getShares.call(accounts[2])).toNumber();
@@ -363,3 +364,4 @@ const createBid = async (percent, price, address) => {
     await erc20Token.approve(devestOne.address, escrow, { from: address });
     await devestOne.bid(price, percent, { from: address });
 }
+

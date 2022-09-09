@@ -2,7 +2,7 @@
 pragma solidity ^0.8.4;
 
 /**
- * @dev Interface of first draft of TST - Tangible Stake Token
+ * @dev Interface of first draft of Tangible Stake Token - TST
  */
 interface ITangibleStakeToken {
 

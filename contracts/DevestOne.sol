@@ -209,9 +209,16 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         orderAddresses.push(_msgSender());
 
         // pull escrow
-        _token.transferFrom(_msgSender(), address(this), _escrow);
+        __transferFrom(_msgSender(), address(this), _escrow);
 
         emit ordered(_msgSender(), _price, amount, true);
+    }
+
+    /**
+     *  Internal token transfer helper
+     */
+    function __transferFrom(address sender, address receiver, uint256 amount) internal virtual {
+        _token.transferFrom(sender, receiver, amount);
     }
 
     /**
@@ -241,7 +248,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
         // check for fee and transfer to owner
         require(msg.value >= 10000000, "Please provide enough fee");
-        //payable(publisher).transfer(msg.value);
+        payable(publisher).transfer(10000000);
 
         Order memory order = orders[orderOwner];
 
@@ -254,18 +261,18 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         // accepting on sell order
         if (order.bid == false) {
             // what the buyer needs to pay (including taxes)
-            _token.transferFrom(_msgSender(), address(this), totalCost);
-            _token.transfer(order.from, cost);
+            __transferFrom(_msgSender(), address(this), totalCost);
+            __transfer(order.from, cost);
         } else {
             // accepting bid order
             // so caller is accepting to sell his share to order owner
             // -> escrow from order can be transferred to owner
-            _token.transfer(_msgSender(), cost);
+            __transfer(_msgSender(), cost);
         }
 
         // pay tangibles
         if (tax != 0)
-            _token.transfer(tangibleAddress, tax);
+            __transfer(tangibleAddress, tax);
 
         // TODO cover different event when accepting bid/ask
         // msg sender is accepting sell order
@@ -288,6 +295,13 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         return 1;
     }
 
+    /**
+     *  Internal token transfer helper
+     */
+    function __transfer(address receiver, uint256 amount) internal virtual {
+        _token.transfer(receiver, amount);
+    }
+
     // Cancel order and return escrow
     function cancel() public virtual override _isActive() returns (bool) {
         require(orders[_msgSender()].amount > 0, 'No open bid');
@@ -296,7 +310,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
         if (_order.bid){
             // return escrow leftover
-            _token.transfer(_msgSender(), _order.escrow);
+            __transfer(_msgSender(), _order.escrow);
         }
 
         // update bids
@@ -316,11 +330,11 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
         // check if enough escrow allowed and pull
         require(_token.allowance(_msgSender(), address(this)) >= amount, 'Insufficient allowance provided');
-        _token.transferFrom(_msgSender(), address(this), amount);
+        __transferFrom(_msgSender(), address(this), amount);
 
         // pay tangible tax
         uint256 tangible = ((tangibleTax * amount) / 100);
-        _token.transfer(tangibleAddress, tangible);
+        __transfer(tangibleAddress, tangible);
 
         // disburse if auto disburse
         if (instantDisburse == true)
@@ -330,12 +344,13 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     }
 
     // Distribute funds on TST to shareholders
-    function disburse () public override _isActive returns (uint256) {
+    function disburse() public override _isActive returns (uint256) {
         uint256 balance = _token.balanceOf(address(this));
+        balance -= escrow;
 
         // distribute to shareholders
         for(uint256 i=0;i<shareholders.length;i++)
-            _token.transfer(shareholders[i], (shares[shareholders[i]] * balance) / 100);
+            __transfer(shareholders[i], (shares[shareholders[i]] * balance) / 100);
 
         return balance;
     }
@@ -378,8 +393,10 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         }
 
         // terminate contract
-        if (totalVotePercentage > 50)
+        if (totalVotePercentage > 50){
+            disburse();
             terminated = true;
+        }
 
         return terminated;
     }
