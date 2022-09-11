@@ -1,6 +1,9 @@
 const DevestOne = artifacts.require("DevestOne");
+const DevestFactory = artifacts.require("DevestFactory");
 const ERC20 = artifacts.require("ERC20PresetFixedSupply");
 
+var devestDAOAddress = null;
+var exampleModelAddress = null;
 
 contract('DevestOne', (accounts) => {
 
@@ -33,8 +36,40 @@ contract('DevestOne', (accounts) => {
         assert.equal(accountOneEndingBalance, 680000000000, "Failed to transfer funds");
     });
 
+    it('Deploy devestONE DAO', async () => {
+        const devestFactory = await DevestFactory.deployed();
+        const erc20Token = await ERC20.deployed();
+
+        const devestDAOImp = await devestFactory.issue("0x0000000000000000000000000000000000000000", "DeVest DAO", "DVDAO");
+        devestDAOAddress = devestDAOImp.logs[0].args[1];
+
+        await devestFactory.setRoot(devestDAOAddress, { from: accounts[0] });
+        await devestFactory.setFee(100000000);
+
+        const devestDAO = await DevestOne.at(devestDAOAddress);
+        await devestDAO.initialize(1000000000, 10, true, { from: accounts[0] });
+        await devestDAO.setTangible(accounts[1], { from: accounts[0] });
+
+        const name = await devestDAO.name.call();
+
+        assert.equal(name, "% DeVest DAO", "Failed to issue DeVest DAO Contract");
+    });
+
+    it('Deploy model-one for Testing further', async () => {
+        const devestFactory = await DevestFactory.deployed();
+        const erc20Token = await ERC20.deployed();
+
+        const exampleOneContract = await devestFactory.issue(erc20Token.address, "Example", "EXP", { value: 100000000 });
+        exampleModelAddress = exampleOneContract.logs[0].args[1];
+
+        const devestDAO = await DevestOne.at(exampleModelAddress);
+        const name = await devestDAO.name.call();
+
+        assert.equal(name, "% Example", "Failed to issue Example Contract");
+    });
+
     it('should Setup Tangible', async () => {
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         // check if variables set
         const name = await devestOne.name.call();
@@ -49,7 +84,7 @@ contract('DevestOne', (accounts) => {
 
     it('Submit Bid Orders', async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         // submit bid
         const pricePerShare = 30000000;
@@ -71,7 +106,7 @@ contract('DevestOne', (accounts) => {
 
     it('Accept Bid Orders (A)', async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         // --- before
         const fundsOwnerBefore = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
@@ -101,7 +136,7 @@ contract('DevestOne', (accounts) => {
 
     it('Check if orders been closed', async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         const offers = await devestOne.getOrders.call();
         assert.equal(offers.length, 0, "Buy order not closed");
@@ -112,7 +147,7 @@ contract('DevestOne', (accounts) => {
 
     it("Create ask order", async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         await devestOne.ask(40000000, 25, { from: accounts[0] });
 
@@ -122,7 +157,7 @@ contract('DevestOne', (accounts) => {
 
     it("Accept ask order", async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         // --- before
         const fundsOwnerBefore = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
@@ -160,7 +195,7 @@ contract('DevestOne', (accounts) => {
 
     it('Add more buy orders', async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         const price = (await devestOne.price.call()).toNumber();
 
@@ -184,7 +219,7 @@ contract('DevestOne', (accounts) => {
 
     it('Accept bids', async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         let fundsTangible = (await erc20Token.balanceOf.call(accounts[1])).toNumber();
         let fundsOwner = (await erc20Token.balanceOf.call(accounts[0])).toNumber();
@@ -248,7 +283,7 @@ contract('DevestOne', (accounts) => {
 
     it('Cancel offer, and get escrow back', async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         let orders = await devestOne.getOrders.call();
 
@@ -289,7 +324,7 @@ contract('DevestOne', (accounts) => {
 
     it('Pay', async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         // collect current funds of shareholders before dividends are paid
         const shareholders = await devestOne.getShareholders.call();
@@ -320,7 +355,7 @@ contract('DevestOne', (accounts) => {
     })
 
     it('Switch tangible', async () => {
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         // call terminate until 50% reached
         await devestOne.setTangible(accounts[2], { from: accounts[0] });
@@ -337,7 +372,7 @@ contract('DevestOne', (accounts) => {
 
     it('Terminate Share', async () => {
         const erc20Token = await ERC20.deployed();
-        const devestOne = await DevestOne.deployed();
+        const devestOne = await DevestOne.at(exampleModelAddress);
 
         // call terminate until 50% reached
         await devestOne.terminate({ from: accounts[0] });
@@ -352,11 +387,18 @@ contract('DevestOne', (accounts) => {
         assert.equal(state, true, "Contract should be terminated");
     });
 
+    it('Check if fees been collected in DeVest DAO', async () => {
+        const DevestDAO = DevestOne.at(devestDAOAddress);
+
+        const balance =  await web3.eth.getBalance(devestDAOAddress);
+        assert.equal(balance, 150000000, "No Fees been paid to DAO");
+    });
+
 });
 
 const createBid = async (percent, price, address) => {
     const erc20Token = await ERC20.deployed();
-    const devestOne = await DevestOne.deployed();
+    const devestOne = await DevestOne.at(exampleModelAddress);
 
     // submit bid
     let escrow = price * percent;

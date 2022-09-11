@@ -10,8 +10,8 @@ import "./ITangibleStakeToken.sol";
 contract DevestOneNative is DevestOne {
 
     // Set owner and DI OriToken
-    constructor(address tokenAddress, string memory __name, string memory __symbol, address owner)
-        DevestOne(tokenAddress ,__name, __symbol, owner) {
+    constructor(string memory __name, string memory __symbol, address owner, address devestDAO)
+        DevestOne(address(0) ,__name, __symbol, owner, devestDAO) {
     }
 
     /**
@@ -30,5 +30,25 @@ contract DevestOneNative is DevestOne {
     function __transferFrom(address sender, address receiver, uint256 amount) override internal {
         //_token.transferFrom(sender, receiver, amount);
     }
+
+    /**
+     *  Internal token balance
+     */
+    function __balanceOf(address account) override internal virtual returns (uint256) {
+        return address(account).balance;
+    }
+
+    /**
+     *  Internal token allowance
+     *  In case of native token, there is now allowance but we need to verify
+     *  the sender submitted enough tokens with the transaction (value)
+     */
+    function __allowance(address sender, uint256 amount) override internal virtual {
+        require(sender != address(0), 'Invalid sender');
+        require(msg.value >= amount, 'Insufficient token submitted');
+    }
+
+    // Function to receive Ether only allowed when contract Native Token
+    receive() external payable {}
 
 }

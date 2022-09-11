@@ -2,6 +2,7 @@
 pragma solidity ^0.8.12;
 
 import "./DevestOne.sol";
+import "./DevestOneNative.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract DevestFactory is Ownable {
@@ -13,22 +14,32 @@ contract DevestFactory is Ownable {
     address[] private tangibles;
 
     uint256 public fee;
-    address public root;
+    address payable public root = payable(address(0));
 
     constructor() Ownable() {
         active = true;
+
     }
 
-    function issue(address _address, string memory name, string memory symbol) public payable
+    function issue(address _tokenAddress, string memory name, string memory symbol) public payable returns (address)
     {
         // check fees and transfer to root
         require(msg.value >= fee, "Please provide the required fees");
         payable(root).transfer(msg.value);
 
-        DevestOne tst = new DevestOne(_address, name, symbol, _msgSender());
-        tangibles.push(address(tst));
+        DevestOne tst;
 
+        // if no token address submitted, tst will be native.
+        if (_tokenAddress == address(0)){
+            tst = new DevestOneNative(name, symbol, _msgSender(), root);
+        } else {
+            tst = new DevestOne(_tokenAddress, name, symbol, _msgSender(), root);
+        }
+
+        tangibles.push(address(tst));
         emit TangibleDeployed(_msgSender(), tst);
+
+        return address(tst);
     }
 
     function history(uint256 offset) public view returns (address[] memory)
@@ -52,7 +63,7 @@ contract DevestFactory is Ownable {
     }
 
     // change the root (TST / DAO) recipient of fees
-    function setRoot(address _root) public {
+    function setRoot(address payable _root) public onlyOwner {
         root = _root;
     }
 
@@ -60,5 +71,10 @@ contract DevestFactory is Ownable {
     function terminate() public onlyOwner {
         active = false;
     }
+
+    /*
+    function pay(address payable recipient) public payable {
+        payable(recipient).transfer(1);
+    }*/
 
 }
