@@ -13,7 +13,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     // ---------------------------- EVENTS ------------------------------------
 
     // When an shareholder exchanged his shares
-    event swapped(address indexed from, address indexed to, uint256 share);
+    event swapped(address indexed from, address indexed to, uint256 share, uint256 totalCost);
 
     // When new buy order was submitted and awaits acceptance
     event ordered(address indexed from, uint256 price, uint256 amount, bool bid);
@@ -283,7 +283,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         price = order.price;
 
         // TODO cover different event when accepting bid/ask
-        emit swapped(_msgSender(), orderOwner, amount);
+        emit swapped(_msgSender(), orderOwner, amount, totalCost);
 
         return 1;
     }
@@ -332,6 +332,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     // Distribute funds on TST to shareholders
     function disburse () public override _isActive returns (uint256) {
         uint256 balance = _token.balanceOf(address(this));
+        balance = balance - escrow;
 
         // distribute to shareholders
         for(uint256 i=0;i<shareholders.length;i++)
