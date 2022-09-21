@@ -32,6 +32,9 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     // Owner of the contract (for admin controls)
     address private publisher;
 
+    // DeVest DAO address for collecting fee's
+    address private devestDAO;
+
     // contract was terminated and can't be used anymore
     bool public terminated = false;
 
@@ -79,11 +82,12 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     mapping (address => address) tangibleVote;
 
     // Set owner and DI OriToken
-    constructor(address tokenAddress, string memory __name, string memory __symbol, address owner) {
+    constructor(address tokenAddress, string memory _name, string memory _symbol, address owner, address _devestDAO) {
         publisher = owner;
+        devestDAO = _devestDAO;
         _token = IERC20(tokenAddress);
-        name = string(abi.encodePacked("% ", __name));
-        symbol = __symbol;
+        name = string(abi.encodePacked("% ", _name));
+        symbol = _symbol;
     }
 
     // ----------------------------------------------------------------------------------------------------------
@@ -201,7 +205,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         _escrow += (_escrow * tangibleTax) / 100;
 
         // check if enough escrow allowed
-        require(_token.allowance(_msgSender(), address(this)) >= _escrow, 'Insufficient allowance provided');
+        __allowance(_msgSender(), _escrow);
 
         // store bid
         Order memory _bid = Order(_price, amount, _msgSender(), _escrow, true);
@@ -209,7 +213,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         orderAddresses.push(_msgSender());
 
         // pull escrow
-        _token.transferFrom(_msgSender(), address(this), _escrow);
+        __transferFrom(_msgSender(), address(this), _escrow);
 
         emit ordered(_msgSender(), _price, amount, true);
     }
@@ -241,7 +245,8 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
         // check for fee and transfer to owner
         require(msg.value >= 10000000, "Please provide enough fee");
-        //payable(publisher).transfer(msg.value);
+        if (devestDAO != address(0))
+            payable(devestDAO).transfer(10000000);
 
         Order memory order = orders[orderOwner];
 
@@ -254,18 +259,18 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         // accepting on sell order
         if (order.bid == false) {
             // what the buyer needs to pay (including taxes)
-            _token.transferFrom(_msgSender(), address(this), totalCost);
-            _token.transfer(order.from, cost);
+            __transferFrom(_msgSender(), address(this), totalCost);
+            __transfer(order.from, cost);
         } else {
             // accepting bid order
             // so caller is accepting to sell his share to order owner
             // -> escrow from order can be transferred to owner
-            _token.transfer(_msgSender(), cost);
+            __transfer(_msgSender(), cost);
         }
 
         // pay tangibles
         if (tax != 0)
-            _token.transfer(tangibleAddress, tax);
+            __transfer(tangibleAddress, tax);
 
         // TODO cover different event when accepting bid/ask
         // msg sender is accepting sell order
@@ -296,7 +301,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
         if (_order.bid){
             // return escrow leftover
-            _token.transfer(_msgSender(), _order.escrow);
+            __transfer(_msgSender(), _order.escrow);
         }
 
         // update bids
@@ -315,12 +320,12 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         //require(msg.value >= 10000000, "Please provide enough fee");
 
         // check if enough escrow allowed and pull
-        require(_token.allowance(_msgSender(), address(this)) >= amount, 'Insufficient allowance provided');
-        _token.transferFrom(_msgSender(), address(this), amount);
+        __allowance(_msgSender(), amount);
+        __transferFrom(_msgSender(), address(this), amount);
 
         // pay tangible tax
         uint256 tangible = ((tangibleTax * amount) / 100);
-        _token.transfer(tangibleAddress, tangible);
+        __transfer(tangibleAddress, tangible);
 
         // disburse if auto disburse
         if (instantDisburse == true)
@@ -330,13 +335,13 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     }
 
     // Distribute funds on TST to shareholders
-    function disburse () public override _isActive returns (uint256) {
-        uint256 balance = _token.balanceOf(address(this));
-        balance = balance - escrow;
+    function disburse() public override _isActive returns (uint256) {
+        uint256 balance = __balanceOf(address(this));
+        balance -= escrow;
 
         // distribute to shareholders
         for(uint256 i=0;i<shareholders.length;i++)
-            _token.transfer(shareholders[i], (shares[shareholders[i]] * balance) / 100);
+            __transfer(shareholders[i], (shares[shareholders[i]] * balance) / 100);
 
         return balance;
     }
@@ -379,12 +384,45 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         }
 
         // terminate contract
-        if (totalVotePercentage > 50)
+        if (totalVotePercentage > 50){
+            disburse();
             terminated = true;
+        }
 
         return terminated;
     }
 
+    // ----------------------------------------------------------------------------------------------------------
+    // -------------------------------------------- TOKEN MANAGEMENT --------------------------------------------
+    // ----------------------------------------------------------------------------------------------------------
+
+    /**
+    *  Internal token transfer
+    */
+    function __transfer(address receiver, uint256 amount) internal virtual {
+        _token.transfer(receiver, amount);
+    }
+
+    /**
+   *  Internal token balance
+   */
+    function __balanceOf(address account) internal virtual returns (uint256) {
+        return _token.balanceOf(account);
+    }
+
+    /**
+     *  Internal token allowance
+     */
+    function __allowance(address account, uint256 amount) internal virtual {
+        require(_token.allowance(account, address(this)) >= amount, 'Insufficient allowance provided');
+    }
+
+    /**
+     *  Internal token transferFrom
+     */
+    function __transferFrom(address sender, address receiver, uint256 amount) internal virtual {
+        _token.transferFrom(sender, receiver, amount);
+    }
 
     // ----------------------------------------------------------------------------------------------------------
     // -------------------------------------------- PUBLIC GETTERS ----------------------------------------------
