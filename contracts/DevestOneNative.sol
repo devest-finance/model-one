@@ -28,7 +28,7 @@ contract DevestOneNative is DevestOne {
      *  => no action required
      */
     function __transferFrom(address sender, address receiver, uint256 amount) override internal {
-        //_token.transferFrom(sender, receiver, amount);
+        require(msg.value >= (amount), "Insufficent funds provided (value)");
     }
 
     /**
@@ -43,7 +43,7 @@ contract DevestOneNative is DevestOne {
      *  In case of native token, there is now allowance but we need to verify
      *  the sender submitted enough tokens with the transaction (value)
      */
-    function __allowance(address sender, uint256 amount) override internal virtual {
+    function  __allowance(address sender, uint256 amount) override internal virtual {
         require(sender != address(0), 'Invalid sender');
         require(msg.value >= amount, 'Insufficient token submitted');
     }

@@ -7,10 +7,10 @@ pragma solidity ^0.8.4;
 interface ITangibleStakeToken {
 
     // Bid a price for shares, (shareholder accepts bid to swap)
-    function bid(uint256 price, uint256 amount) external;
+    function bid(uint256 price, uint256 amount) payable external;
 
     // Ask for a price, (shareholder offers share to respective price)
-    function ask(uint256 price, uint256 amount) external;
+    function ask(uint256 price, uint256 amount) payable external;
 
     // Accept bid and sell shares
     function accept(address bidder, uint256 amount) external payable returns (uint256);
@@ -19,7 +19,7 @@ interface ITangibleStakeToken {
     function cancel() external returns (bool);
 
     // Pay charges or costs
-    function pay(uint256 amount) external;
+    function pay(uint256 amount) payable external;
 
     // Disburse funds
     function disburse() external returns (uint256);

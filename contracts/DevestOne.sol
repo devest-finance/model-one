@@ -86,8 +86,8 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         publisher = owner;
         devestDAO = _devestDAO;
         _token = IERC20(tokenAddress);
-        name = string(abi.encodePacked("% ", _name));
-        symbol = _symbol;
+        symbol = string(abi.encodePacked("% ", _symbol));
+        name = _name;
     }
 
     // ----------------------------------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         }
 
         if (orders[orderOwner].amount == 0){
-            require(orders[orderOwner].escrow == 0, 'Escrow leftover'); // ????????????? WHAT IS THE PURPOSE OF THIS 
+            //require(orders[orderOwner].escrow == 0, 'Escrow leftover'); // ????????????? WHAT IS THE PURPOSE OF THIS
             uint256 index = 0;
             for(uint256 i=0;i< orderAddresses.length;i++){
                 if (orderAddresses[i] == orderOwner)
@@ -195,7 +195,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     /**
     *  Bid for purchase
     */
-    function bid(uint256 _price, uint256 amount) public virtual override nonReentrant _isActive{
+    function bid(uint256 _price, uint256 amount) public payable virtual override nonReentrant _isActive{
         require(amount > 0 && amount <= 100, 'Invalid amount submitted');
         require(price > 0, 'Invalid price submitted');
         require(orders[_msgSender()].amount == 0, 'Active bid, cancel first');
@@ -221,7 +221,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     /**
      *  Ask for sell
      */
-    function ask(uint256 _price, uint256 amount) public override nonReentrant _isActive {
+    function ask(uint256 _price, uint256 amount) public payable override nonReentrant _isActive {
         require(amount > 0 && amount <= 100, 'Invalid amount submitted');
         require(_price > 0, 'Invalid price submitted');
         require(shares[_msgSender()]  > 0, 'Insufficient shares');
@@ -250,22 +250,25 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
         Order memory order = orders[orderOwner];
 
+        // In case of bid, check if owner has enough shares
+        if (order.bid == true)
+            require(shares[_msgSender()] >= amount,"Insufficient shares");
+
         // calculate taxes
         uint256 cost = order.price * amount;
         uint256 tax = (cost * tangibleTax) / 100;
-
         uint256 totalCost = cost + tax;
 
-        // accepting on sell order
-        if (order.bid == false) {
-            // what the buyer needs to pay (including taxes)
-            __transferFrom(_msgSender(), address(this), totalCost);
-            __transfer(order.from, cost);
-        } else {
+        // accepting on bid order
+        if (order.bid == true) {
             // accepting bid order
             // so caller is accepting to sell his share to order owner
             // -> escrow from order can be transferred to owner
             __transfer(_msgSender(), cost);
+        } else {
+            // what the buyer needs to pay (including taxes)
+            __transferFrom(_msgSender(), address(this), totalCost);
+            __transfer(order.from, cost);
         }
 
         // pay tangibles
@@ -290,21 +293,17 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         // TODO cover different event when accepting bid/ask
         emit swapped(_msgSender(), orderOwner, amount);
 
-        return 1;
+        return cost;
     }
-
-
 
     // Cancel order and return escrow
     function cancel() public virtual override _isActive() returns (bool) {
         require(orders[_msgSender()].amount > 0, 'No open bid');
 
         Order memory _order = orders[_msgSender()];
-
-        if (_order.bid){
-            // return escrow leftover
+        // return escrow leftover
+        if (_order.bid)
             __transfer(_msgSender(), _order.escrow);
-        }
 
         // update bids
         deductAmountfromOrder(_msgSender(), _order.amount);
@@ -313,13 +312,14 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     }
 
     // Pay usage charges
-    function pay(uint256 amount) public override _isActive{
+    function pay(uint256 amount) public payable override _isActive{
         require(initialized, 'Tangible was not initialized');
         require(!terminated, 'Share was terminated');
         require(amount > 0, 'Invalid amount provided');
 
         // charge fee
-        //require(msg.value >= 10000000, "Please provide enough fee");
+        require(msg.value >= 10000000, "Please provide enough fee");
+            payable(devestDAO).transfer(10000000);
 
         // check if enough escrow allowed and pull
         __allowance(_msgSender(), amount);
@@ -370,6 +370,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         return tangibleAddress;
     }
 
+
     // Terminate this contract, and pay-out all remaining investors
     function terminate() public override _isActive() returns (bool) {
         require(shares[_msgSender()] > 0, 'Only shareholders can vote for termination');
@@ -393,6 +394,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
         return terminated;
     }
+
 
     // ----------------------------------------------------------------------------------------------------------
     // -------------------------------------------- TOKEN MANAGEMENT --------------------------------------------
@@ -435,13 +437,12 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
     function getOrders() public view returns (Order[] memory) {
         Order[] memory _orders = new Order[](orderAddresses.length);
 
-        for(uint256 i=0;i< orderAddresses.length;i++){
-            Order memory order = orders[orderAddresses[i]];
-            _orders[i] = order;
-        }
+        for(uint256 i=0;i< orderAddresses.length;i++)
+            _orders[i] = orders[orderAddresses[i]];
 
         return _orders;
     }
+
 
     // Get shares of one investor
     function balanceOf(address _owner) public view returns (uint256) {
