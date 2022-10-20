@@ -40,7 +40,7 @@ contract('DevestOne', (accounts) => {
         const devestFactory = await DevestFactory.deployed();
         const erc20Token = await ERC20.deployed();
 
-        const devestDAOImp = await devestFactory.issue("0x0000000000000000000000000000000000000000", "DeVest DAO", "DVDAO");
+        const devestDAOImp = await devestFactory.issue("0x0000000000000000000000000000000000000000", "DeVest DAO", "DeVest DAO");
         devestDAOAddress = devestDAOImp.logs[0].args[1];
 
         await devestFactory.setRoot(devestDAOAddress, { from: accounts[0] });
@@ -50,9 +50,9 @@ contract('DevestOne', (accounts) => {
         await devestDAO.initialize(1000000000, 10, true, { from: accounts[0] });
         await devestDAO.setTangible(accounts[1], { from: accounts[0] });
 
-        const name = await devestDAO.name.call();
+        const symbol = await devestDAO.symbol.call();
 
-        assert.equal(name, "% DeVest DAO", "Failed to issue DeVest DAO Contract");
+        assert.equal(symbol, "% DeVest DAO", "Failed to issue DeVest DAO Contract");
     });
 
     it('Deploy model-one for Testing further', async () => {
@@ -63,9 +63,9 @@ contract('DevestOne', (accounts) => {
         exampleModelAddress = exampleOneContract.logs[0].args[1];
 
         const devestDAO = await DevestOne.at(exampleModelAddress);
-        const name = await devestDAO.name.call();
+        const symbol = await devestDAO.symbol.call();
 
-        assert.equal(name, "% Example", "Failed to issue Example Contract");
+        assert.equal(symbol, "% EXP", "Failed to issue Example Contract");
     });
 
     it('should Setup Tangible', async () => {
@@ -406,4 +406,3 @@ const createBid = async (percent, price, address) => {
     await erc20Token.approve(devestOne.address, escrow, { from: address });
     await devestOne.bid(price, percent, { from: address });
 }
-

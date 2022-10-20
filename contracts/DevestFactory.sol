@@ -72,9 +72,4 @@ contract DevestFactory is Ownable {
         active = false;
     }
 
-    /*
-    function pay(address payable recipient) public payable {
-        payable(recipient).transfer(1);
-    }*/
-
 }
