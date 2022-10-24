@@ -34,6 +34,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
     // DeVest DAO address for collecting fee's
     address private devestDAO;
+    uint256 private fees = 1000000000000000;
 
     // contract was terminated and can't be used anymore
     bool public terminated = false;
@@ -244,9 +245,9 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         require(_msgSender() != orders[orderOwner].from, "Can't accept your own order");
 
         // check for fee and transfer to owner
-        require(msg.value >= 10000000, "Please provide enough fee");
+        require(msg.value >= fees, "Please provide enough fee");
         if (devestDAO != address(0))
-            payable(devestDAO).transfer(10000000);
+            payable(devestDAO).transfer(fees);
 
         Order memory order = orders[orderOwner];
 
@@ -318,8 +319,8 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
         require(amount > 0, 'Invalid amount provided');
 
         // charge fee
-        require(msg.value >= 10000000, "Please provide enough fee");
-            payable(devestDAO).transfer(10000000);
+        require(msg.value >= fees, "Please provide enough fee");
+            payable(devestDAO).transfer(fees);
 
         // check if enough escrow allowed and pull
         __allowance(_msgSender(), amount);

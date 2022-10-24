@@ -27,7 +27,7 @@ contract DevestOneNative is DevestOne {
      *  the transaction is available on the contract
      *  => no action required
      */
-    function __transferFrom(address sender, address receiver, uint256 amount) override internal {
+    function __transferFrom(address /*sender*/, address /*receiver*/, uint256 amount) override internal {
         require(msg.value >= (amount), "Insufficent funds provided (value)");
     }
 
