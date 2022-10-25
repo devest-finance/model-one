@@ -34,7 +34,7 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
     // DeVest DAO address for collecting fee's
     address private devestDAO;
-    uint256 private fees = 1000000000000000;
+    uint256 private fees = 10000000;
 
     // contract was terminated and can't be used anymore
     bool public terminated = false;
@@ -195,6 +195,8 @@ contract DevestOne is ITangibleStakeToken, ReentrancyGuard {
 
     /**
     *  Bid for purchase
+    *  _price: price for the amount of shares
+    *  amount: amount
     */
     function bid(uint256 _price, uint256 amount) public payable virtual override nonReentrant _isActive{
         require(amount > 0 && amount <= 100, 'Invalid amount submitted');
