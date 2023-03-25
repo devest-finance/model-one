@@ -1,24 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.12;
 
-import "./DevestOne.sol";
-import "./DevestOneNative.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import "./ModelOne.sol";
 
-contract DevestFactory is Ownable {
+contract ModelOneFactory is Ownable {
 
-    event TangibleDeployed(address indexed issuer_address, DevestOne indexed contract_address);
+    event TangibleDeployed(address indexed issuer_address, address indexed contract_address);
 
     bool private active = false;
 
-    address[] private tangibles;
+    address[] internal tangibles;
 
     uint256 public fee;
     address payable public root = payable(address(0));
 
     constructor() Ownable() {
         active = true;
-
     }
 
     function issue(address _tokenAddress, string memory name, string memory symbol) public payable returns (address)
@@ -27,17 +25,10 @@ contract DevestFactory is Ownable {
         require(msg.value >= fee, "Please provide the required fees");
         payable(root).transfer(msg.value);
 
-        DevestOne tst;
-
-        // if no token address submitted, tst will be native.
-        if (_tokenAddress == address(0)){
-            tst = new DevestOneNative(name, symbol, _msgSender(), root);
-        } else {
-            tst = new DevestOne(_tokenAddress, name, symbol, _msgSender(), root);
-        }
+        ModelOne tst = new ModelOne(_tokenAddress, name, symbol, _msgSender(), root);
 
         tangibles.push(address(tst));
-        emit TangibleDeployed(_msgSender(), tst);
+        emit TangibleDeployed(_msgSender(), address(tst));
 
         return address(tst);
     }
