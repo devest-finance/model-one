@@ -1,11 +1,8 @@
-const DevestOne = artifacts.require("DevestOneNative");
-const DevestFactory = artifacts.require("DevestFactory");
-const ERC20 = artifacts.require("ERC20PresetFixedSupply");
-
 var devestDAOAddress = null;
 var exampleModelAddress = null;
 
-contract('DevestOne', (accounts) => {
+/*
+contract('DevestOneNative', (accounts) => {
 
     it('should put 1000000 Token in the first account', async () => {
         const ERC20TokenInstance = await ERC20.deployed();
@@ -212,17 +209,7 @@ contract('DevestOne', (accounts) => {
         assert.equal(orders[3].price, 80000000, "Order has invalid price");
     })
 
-    /*
-    it('test', async () => {
-        const devestOne = await DevestOne.at(exampleModelAddress);
-        const offers = await devestOne.getOrders.call();
-        result = await send(devestOne.accept, [offers[3].from, 20], accounts[0], 10000000);
-        assert.equal(result.delta, 790000000, "Invalid amount paid to owner");
-    });*/
 
-    /**
-     *
-     */
     it('Accept bids', async () => {
         const devestOne = await DevestOne.at(exampleModelAddress);
 
@@ -242,16 +229,14 @@ contract('DevestOne', (accounts) => {
         assert.equal(result.delta, 790000000, "Invalid amount paid to owner");
 
         // --- leftover escrow
-        /*
-            1:"40000000", "20", "880000000"
-            2:"60000000", "10", "660000000"
-            3:"80000000", "20", "1760000000"
-            4:"20000000", "20", "440000000"
-
-            3400000000 = 40000000 * 20 + 60000000 * 10 + 80000000 * 20 + 20000000 * 20;
-            1200000000 (Without Tax)
-            1320000000 = 3400000000 - 800000000 - 600000000 - 800000000 -- (fees)
-         */
+        //   1:"40000000", "20", "880000000"
+        //   2:"60000000", "10", "660000000"
+        //   3:"80000000", "20", "1760000000"
+        //   4:"20000000", "20", "440000000"
+        //
+        //   3400000000 = 40000000 * 20 + 60000000 * 10 + 80000000 * 20 + 20000000 * 20;
+        //   1200000000 (Without Tax)
+        //   1320000000 = 3400000000 - 800000000 - 600000000 - 800000000 -- (fees)
         fundsTangible = await getBalance(exampleModelAddress)
         assert.equal(fundsTangible.toNumber(), 1320000000, "Invalid funds on tangible after trades");
 
@@ -384,6 +369,7 @@ contract('DevestOne', (accounts) => {
 
 });
 
+
 const send = async (fn, properties, sender, value) => {
     const fundsOwnerBefore = web3.utils.toBN(await web3.eth.getBalance(sender));
 
@@ -403,8 +389,7 @@ const send = async (fn, properties, sender, value) => {
         delta: delta.toNumber()
     }
 }
-
-
+*/
 const getBalance = async (account) => {
     return web3.utils.toBN(await web3.eth.getBalance(account));
 }

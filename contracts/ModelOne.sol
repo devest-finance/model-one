@@ -17,7 +17,7 @@ E7 : Currently only max 2 decimals supported
 E8 : Amount must be bigger than 100
 E9 : Invalid amount submitted
 E10 : Invalid price submitted
-E11 : Active bid, cancel first
+E11 : Active buy order, cancel first
 E12 : Invalid amount submitted
 E13 : Invalid price submitted
 E14 : Insufficient shares
@@ -237,11 +237,25 @@ contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Con
     // ------------------------------------------------ TRADING -------------------------------------------------
 
     /**
-    *  Bid for purchase
+    * Swap shares between owners,
+    * Check for same level of disburse !!
+    */
+    function transfer(address recipient, uint256 amount) external payable _takeFee{
+        if (shares[_msgSender()] != amount){
+            if (shares[recipient] > 0){
+                require(shareholdersLevel[_msgSender()] == shareholdersLevel[recipient], "Recipients or sender has pending disbursements!");
+            }
+        }
+
+        swapShares(recipient, _msgSender(), amount);
+    }
+
+    /**
+    *  Buy Order
     *  _price: price for the amount of shares
     *  amount: amount
     */
-    function bid(uint256 _price, uint256 amount) public payable virtual override nonReentrant _isActive{
+    function buy(uint256 _price, uint256 amount) public payable virtual override nonReentrant _isActive{
         require(amount > 0 && amount <= 100, 'E9');
         require(_price > 0, 'E10');
         require(orders[_msgSender()].amount == 0, 'E11');
@@ -264,9 +278,9 @@ contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Con
     }
 
     /**
-     *  Ask for sell
+     *  Sell order
      */
-    function ask(uint256 _price, uint256 amount) public payable override nonReentrant _isActive {
+    function sell(uint256 _price, uint256 amount) public payable override nonReentrant _isActive {
         require(amount > 0 && amount <= 100, 'E12');
         require(_price > 0, 'E13');
         require(shares[_msgSender()]  > 0, 'E14');
@@ -292,6 +306,8 @@ contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Con
         // In case of bid, check if owner has enough shares
         if (order.bid == true)
             require(shares[_msgSender()] >= amount,"E19");
+        else
+            require(shares[orderOwner] >= amount, "E19");
 
         // calculate taxes
         uint256 cost = order.price * amount;
@@ -407,6 +423,7 @@ contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Con
     *  amount: amount to add
     */
     function addAsset(address token, uint256 amount) public payable virtual nonReentrant {
+        require(token != _vestingToken, "Vesting token cannot be added as Asset");
         require(!initialized, 'Tangible already initialized');
         require(amount >= 0, 'Invalid amount');
 
@@ -418,7 +435,7 @@ contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Con
         assets.push(Asset(token, amount, 0));
     }
 
-    function withdraw() public payable nonReentrant {
+    function withdraw() public payable nonReentrant{
         require(shares[_msgSender()] > 0, 'No shares available');
 
         // check assets attached then withdraw is only possible
@@ -452,7 +469,7 @@ contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Con
 
         for(uint256 i=0;i<assets.length;i++){
             IERC20 _token = IERC20(assets[i].token);
-            uint256 amount = ((shares[_msgSender()] * 100) / assets[i].amount);
+            uint256 amount = ((shares[_msgSender()] * assets[i].amount) / 100);
             _token.transfer(_msgSender(), amount);
         }
 
@@ -484,7 +501,7 @@ contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Con
         fees = _fees;
     }
 
-    function getSomeArray() external view returns (address[] memory) {
+    function getOrders() external view returns (address[] memory) {
         return orderAddresses;
     }
 
