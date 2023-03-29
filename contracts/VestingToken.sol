@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.12;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract VestTokenHandler {
+contract VestingToken {
 
     address internal _vestingToken;
 
@@ -38,7 +38,7 @@ contract VestTokenHandler {
     /**
      *  Internal token balance
     */
-    function __balanceOf(address account) internal returns (uint256) {
+    function __balanceOf(address account) internal view returns (uint256) {
         if (_vestingToken == address(0)){
             return address(account).balance;
         } else {

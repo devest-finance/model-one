@@ -2,9 +2,9 @@
 pragma solidity ^0.8.12;
 
 import "./ITangibleStakeToken.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import "./VestTokenHandler.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Context.sol";
+import "./VestingToken.sol";
 
 /** errors
 E1 : Only owner can initialize tangibles
@@ -38,7 +38,7 @@ E26 : Only DeVest can update Fees
 
 // DeVest Investment Model One
 // Bid & Offer
-contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Context {
+contract ModelOne is ITangibleStakeToken, VestingToken, ReentrancyGuard, Context {
 
     // ---------------------------- EVENTS ------------------------------------
 
@@ -95,11 +95,11 @@ contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Con
 
     // Stakes
     mapping (address => uint256) internal shares;                   // shares of shareholder
-    mapping (address => uint256) internal shareholdersLevel;            // level of disburse the shareholder withdraw
+    mapping (address => uint256) internal shareholdersLevel;        // level of disburse the shareholder withdraw
     mapping (address => uint256) internal shareholdersIndex;        // index of the shareholders address
     address[] internal shareholders;                                // all current shareholders
 
-    uint256[] public disburseLevels;         // Amount disburse in each level
+    uint256[] public disburseLevels;    // Amount disburse in each level
     uint256 internal totalDisbursed;    // Total amount disbursed (not available anymore)
 
     // metadata
@@ -123,7 +123,7 @@ contract ModelOne is ITangibleStakeToken, VestTokenHandler, ReentrancyGuard, Con
 
     // Set owner and DI OriToken
     constructor(address _tokenAddress, string memory _name, string memory _symbol, address owner, address _devestDAO)
-    VestTokenHandler(_tokenAddress) {
+    VestingToken(_tokenAddress) {
         publisher = owner;
         devestDAO = _devestDAO;
         symbol = string(abi.encodePacked("% ", _symbol));
