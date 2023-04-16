@@ -1,5 +1,8 @@
 const ModelOne = artifacts.require("ModelOne");
+const ModelTwo = artifacts.require("ModelTwo");
 const ModelOneFactory = artifacts.require("ModelOneFactory");
+const ModelTwoFactory = artifacts.require("ModelTwoFactory");
+
 
 const ERC20 = artifacts.require("ERC20PresetFixedSupply");
 
@@ -42,6 +45,19 @@ contract('Testing Deployments', (accounts) => {
 
         const value = (await devestOne.value.call()).toNumber();
         assert.equal(value, 3000000000, "Invalid price on initialized tangible");
+    });
+
+    it('Deploy ModelTwo as ETF', async () => {
+        const modelTwoFactory = await ModelTwoFactory.deployed();
+        const erc20Token = await ERC20.deployed();
+
+        const exampleOneContract = await modelTwoFactory.issue(erc20Token.address, "Example", "EXP", { value: 100000000 });
+        exampleModelAddress = exampleOneContract.logs[0].args[1];
+
+        const devestDAO = await ModelTwo.at(exampleModelAddress);
+        const symbol = await devestDAO.symbol.call();
+
+        assert.equal(symbol, "% EXP", "Failed to issue Example Contract");
     });
 
 });

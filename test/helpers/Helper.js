@@ -1,6 +1,8 @@
 const ERC20 = artifacts.require("ERC20PresetFixedSupply");
 const ModelOne = artifacts.require("ModelOne");
+const ModelTwo = artifacts.require("ModelTwo");
 const ModelOneFactory = artifacts.require("ModelOneFactory");
+const ModelTwoFactory = artifacts.require("ModelTwoFactory");
 
 class Helper {
 
@@ -37,6 +39,27 @@ class Helper {
         assert.equal(_value, value, "Invalid price on initialized tangible");
 
         return modelOneInstance;
+    }
+
+    static async createTangibleTwo(factory, tokenAddress, name, short, initalValue, tax, decimal, sender){
+        const exampleTwoContract = await factory.issue(tokenAddress, name, short, { value: 100000000 });
+
+        const modelTwoInstance = await ModelTwo.at(exampleTwoContract.logs[0].args[1]);
+        const symbol = await modelTwoInstance.symbol.call();
+
+        assert.equal(symbol, "% EXP", "Failed to issue Example Contract");
+
+        // check if variables set
+        const _name = await modelTwoInstance.name.call();
+        assert(_name, "Example", "Invalid name on TST");
+
+        /*
+        await modelTwoInstance.initialize(initalValue, tax, { from: sender });
+
+        const _value = (await modelTwoInstance.initalValue.call()).toNumber();
+        assert.equal(_value, initalValue, "Invalid price on initialized tangible");
+        */
+        return modelTwoInstance;
     }
 
     static async createERCBuyOrder(token, model, percent, price, address){

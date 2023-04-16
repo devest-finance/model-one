@@ -2,10 +2,10 @@
 pragma solidity ^0.8.12;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import "./ModelOne.sol";
 import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import "./ModelTwo.sol";
 
-contract ModelOneFactory is Ownable {
+contract ModelTwoFactory is Ownable {
 
     event TangibleDeployed(address indexed issuer_address, address indexed contract_address);
     event TokenDeployed(address indexed issuer_address, address indexed contract_address);
@@ -28,7 +28,7 @@ contract ModelOneFactory is Ownable {
         require(msg.value >= fee, "Please provide the required fees");
         payable(root).transfer(msg.value);
 
-        ModelOne tst = new ModelOne(_tokenAddress, name, symbol, _msgSender(), root);
+        ModelTwo tst = new ModelTwo(_tokenAddress, name, symbol, _msgSender(), root);
 
         tangibles.push(address(tst));
         emit TangibleDeployed(_msgSender(), address(tst));
